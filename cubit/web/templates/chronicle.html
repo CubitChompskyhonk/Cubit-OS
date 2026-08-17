@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Chronicle — Cubit OS{% endblock %}
+{% block content %}
+<h1>Chronicle</h1>
+{% for e in events|reverse %}
+  <div class="card">
+    <span class="muted">{{ e.date[:19] if e.date else '' }}</span>
+    <p><strong>{{ e.event }}</strong></p>
+    <p class="muted">{{ e.significance }}</p>
+  </div>
+{% else %}
+  <p class="muted">No events yet.</p>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,18 @@
+{
+  "proposals": [
+    {
+      "id": "prop-001",
+      "action": "create_project",
+      "description": "Create project 'SmokeTestProject'",
+      "params": {
+        "name": "SmokeTestProject",
+        "next_action": "Define first milestone",
+        "status": "Concept"
+      },
+      "risk_notes": "Adds a new active concern. Ensure capacity (focus status).",
+      "requires_approval": true,
+      "status": "executed",
+      "created": "2026-08-17T23:19:23.415965Z"
+    }
+  ]
+}

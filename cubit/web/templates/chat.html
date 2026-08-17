@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Chat — Cubit OS{% endblock %}
+{% block focus %}
+<h3>Steward</h3>
+<p>
+  <span class="badge {% if steward.aligned %}good{% else %}warn{% endif %}">
+    {{ "Aligned" if steward.aligned else "Review" }}
+  </span>
+</p>
+<p class="muted">Focus: {{ steward.focus_status }}</p>
+<p class="muted">Projects: {{ steward.project_count }}</p>
+<p class="muted">Exec rate: {{ steward.execution_rate }}%</p>
+{% if pending %}
+<hr style="border-color:var(--border);margin:1rem 0;" />
+<h3>Pending</h3>
+{% for p in pending %}
+<div class="card" style="padding:0.6rem;margin-bottom:0.5rem;">
+  <div class="muted">{{ p.id }}</div>
+  <div>{{ p.description }}</div>
+  <div class="prop-actions">
+    <button class="good" onclick="approve('{{ p.id }}')">Approve</button>
+    <button class="danger" onclick="reject('{{ p.id }}')">Reject</button>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}
+{% block content %}
+<h1>Chat</h1>
+<p class="muted">Cubit proposes. You decide. Significant actions require approval.</p>
+<div id="log" class="chat-log card"></div>
+<div class="input-row">
+  <input type="text" id="msg" placeholder="briefing · create project X · approve prop-001 · help" />
+  <button onclick="send()">Send</button>
+</div>
+<script>
+const log = document.getElementById('log');
+function add(role, text) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + role;
+  d.textContent = (role === 'user' ? 'You: ' : 'Cubit: ') + text;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+async function send() {
+  const input = document.getElementById('msg');
+  const text = input.value.trim();
+  if (!text) return;
+  add('user', text);
+  input.value = '';
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({message: text})
+  });
+  const data = await res.json();
+  add('bot', data.message || JSON.stringify(data));
+  if (data.pending && data.pending.length) location.reload();
+}
+async function approve(id) {
+  const res = await fetch('/api/proposals/' + id + '/approve', {method: 'POST'});
+  const data = await res.json();
+  add('bot', 'Approved ' + id + ': ' + (data.execution ? data.execution.status : JSON.stringify(data)));
+  setTimeout(() => location.reload(), 800);
+}
+async function reject(id) {
+  const res = await fetch('/api/proposals/' + id + '/reject', {method: 'POST'});
+  const data = await res.json();
+  add('bot', data.message || JSON.stringify(data));
+  setTimeout(() => location.reload(), 800);
+}
+document.getElementById('msg').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+</script>
+{% endblock %}

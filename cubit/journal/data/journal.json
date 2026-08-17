@@ -1,0 +1,16 @@
+{
+  "entries": [
+    {
+      "type": "decision",
+      "decision": "Approved and executed: create_project",
+      "reason": "Create project 'SmokeTestProject'",
+      "outcome": "success",
+      "related_proposal": "prop-001",
+      "tags": [
+        "approval",
+        "create_project"
+      ],
+      "created": "2026-08-17T23:19:39.752995Z"
+    }
+  ]
+}

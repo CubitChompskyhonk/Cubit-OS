@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Journal — Cubit OS{% endblock %}
+{% block content %}
+<h1>Journal</h1>
+{% for e in entries|reverse %}
+  <div class="card">
+    <span class="badge">{{ e.type }}</span>
+    <span class="muted">{{ e.created[:19] if e.created else '' }}</span>
+    {% if e.type == 'decision' %}
+      <p><strong>{{ e.decision }}</strong></p>
+      <p class="muted">{{ e.reason }} — outcome: {{ e.outcome }}</p>
+    {% else %}
+      <p><strong>{{ e.lesson }}</strong></p>
+      <p class="muted">{{ e.context }}</p>
+    {% endif %}
+  </div>
+{% else %}
+  <p class="muted">No journal entries yet.</p>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,14 @@
+{
+  "events": [
+    {
+      "date": "2026-08-17T23:19:18.809565Z",
+      "event": "Cubit OS initialized from Project Domino rebuild",
+      "significance": "Foundation established"
+    },
+    {
+      "date": "2026-08-17T23:19:40.577047Z",
+      "event": "Executed create_project: {'name': 'SmokeTestProject', 'next_action': 'Define first milestone', 'status': 'Concept'}",
+      "significance": "Create project 'SmokeTestProject'"
+    }
+  ]
+}

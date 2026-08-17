@@ -1,0 +1,24 @@
+{
+  "departments": [
+    {
+      "name": "Steward",
+      "description": "Are we aligned?",
+      "status": "active"
+    },
+    {
+      "name": "Advisor",
+      "description": "What should we consider?",
+      "status": "active"
+    },
+    {
+      "name": "Historian",
+      "description": "Why did we become this?",
+      "status": "active"
+    },
+    {
+      "name": "Builder",
+      "description": "How do we create?",
+      "status": "active"
+    }
+  ]
+}

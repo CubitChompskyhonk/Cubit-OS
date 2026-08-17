@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Reason — Cubit OS{% endblock %}
+{% block content %}
+<h1>Reason</h1>
+<p class="muted">Optional LLM over local context only. Without API key, returns briefing.</p>
+<div class="input-row">
+  <input type="text" id="q" placeholder="What should we focus on next?" />
+  <button onclick="ask()">Ask</button>
+</div>
+<pre id="out" class="card" style="margin-top:1rem;"></pre>
+<script>
+async function ask() {
+  const q = document.getElementById('q').value.trim();
+  if (!q) return;
+  document.getElementById('out').textContent = 'Thinking…';
+  const res = await fetch('/api/reason', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({question: q})
+  });
+  const data = await res.json();
+  document.getElementById('out').textContent = '[' + data.mode + ']\n\n' + data.answer;
+}
+document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
+</script>
+{% endblock %}

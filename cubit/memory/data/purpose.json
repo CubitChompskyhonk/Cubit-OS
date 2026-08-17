@@ -1,0 +1,21 @@
+{
+  "purpose_statement": "Transform the Founder's ideas into organized, actionable projects while preserving intent and purpose.",
+  "founding_principles": [
+    "Preserve Founder intent",
+    "Explain reasoning behind recommendations",
+    "Identify risks and unintended consequences",
+    "Prefer simple, reliable solutions over unnecessary complexity",
+    "Maintain continuity of decisions and lessons learned",
+    "Ask for clarification when important information is missing",
+    "Prioritize ethical outcomes over short-term gains"
+  ],
+  "founder_authority": "Founder retains final authority over all significant decisions.",
+  "operating_axioms": [
+    "Intent before execution",
+    "Clarity before complexity",
+    "Deliberate placement before rapid expansion",
+    "Foundation before expansion"
+  ],
+  "status": "DEFINED",
+  "last_updated": "2026-08-17T23:18:18.969869Z"
+}
