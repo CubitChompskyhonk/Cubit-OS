@@ -48,6 +48,14 @@ def main(argv: list[str] | None = None) -> int:
     p_web = sub.add_parser("web", help="Local dashboard")
     p_web.add_argument("--port", type=int, default=8080)
 
+
+    p_api = sub.add_parser("api", help="API framework helpers")
+    p_api.add_argument("action", nargs="?", choices=["routes", "key", "keys", "open-mode-hint"])
+    p_api.add_argument("--name", default="default")
+
+    p_commerce = sub.add_parser("commerce", help="Optional Stripe commerce status (off by default)")
+    p_commerce.add_argument("action", nargs="?", choices=["status", "wallet"], default="status")
+
     args = parser.parse_args(argv)
 
     if args.cmd is None:
@@ -216,6 +224,37 @@ def main(argv: list[str] | None = None) -> int:
         except ImportError:
             print("Web dependencies missing. pip install fastapi uvicorn jinja2 python-multipart")
             return 1
+        return 0
+
+
+    if args.cmd == "api":
+        from cubit.api.router import ApiRouter
+        from cubit.api.framework import ApiFramework
+        if args.action == "routes":
+            for r in ApiRouter().list_routes():
+                print(f"{r['method']:6} {r['path']:40} scope={r['scope']}")
+        elif args.action == "key":
+            created = ApiFramework().keys.create_key(name=args.name)
+            print("API key created (store now, shown once):")
+            print(created.get("key"))
+            print(f"id={created.get('id')} prefix={created.get('prefix')}")
+        elif args.action == "keys":
+            for k in ApiFramework().keys.list_keys():
+                print(k)
+        else:
+            print("Actions: routes | key | keys")
+            print("Auth: Authorization: Bearer <key>")
+            print("Local open mode: export CUBIT_API_OPEN=1")
+        return 0
+
+    if args.cmd == "commerce":
+        from cubit.commerce.stripe_wallet import CommerceGateway
+        import json
+        gw = CommerceGateway()
+        if args.action == "wallet" and gw.enabled:
+            print(json.dumps(gw.wallet_summary(), indent=2))
+        else:
+            print(json.dumps(gw.status(), indent=2))
         return 0
 
     parser.print_help()

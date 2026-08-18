@@ -78,3 +78,38 @@ PYTHONPATH=. python tests/test_smoke.py
 ## License / policy
 
 Free. No payment code paths. Core features fully local.
+
+
+## API framework (`/api/v1`)
+
+Versioned local REST surface with envelope responses and API keys.
+
+```bash
+export CUBIT_API_OPEN=1   # local open mode (no key)
+# or:
+python -m cubit api key --name founder
+
+curl -H "Authorization: Bearer cubit_..." http://127.0.0.1:8080/api/v1/health
+curl -H "Authorization: Bearer cubit_..." http://127.0.0.1:8080/api/v1/routes
+curl -H "Authorization: Bearer cubit_..." http://127.0.0.1:8080/api/v1/briefing
+```
+
+Writes that change organizational state still create **proposals** (Approval Gate).
+
+CLI: `python -m cubit api routes|key|keys`
+
+## Optional commerce (Stripe)
+
+**Off by default.** Free core and free Android APK never require payments.
+
+```bash
+export CUBIT_COMMERCE=1
+export STRIPE_SECRET_KEY=sk_test_...
+export STRIPE_PUBLISHABLE_KEY=pk_test_...
+pip install stripe
+
+python -m cubit commerce status
+# API: GET /api/v1/commerce/status  POST /api/v1/commerce/checkout
+```
+
+Android free builds intentionally exclude billing libraries and do not enable commerce.

@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -120,3 +120,46 @@ def page_chronicle(request: Request):
 @app.get("/reason", response_class=HTMLResponse)
 def page_reason(request: Request):
     return templates.TemplateResponse("reason.html", {"request": request})
+
+
+# ── API v1 framework ─────────────────────────────────────────────────
+from cubit.api.router import ApiRouter
+
+_api = ApiRouter()
+
+
+@app.api_route("/api/v1/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def api_v1(path: str, request: Request):
+    body = {}
+    if request.method in ("POST", "PUT", "PATCH"):
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+    query = dict(request.query_params)
+    auth = request.headers.get("authorization")
+    result = _api.dispatch(
+        method=request.method,
+        path="/" + path,
+        body=body,
+        query=query,
+        authorization=auth,
+    )
+    status = 200 if result.ok else (401 if result.error and result.error.code == "unauthorized" else 400)
+    if result.error and result.error.code == "not_found":
+        status = 404
+    if result.error and result.error.code == "forbidden":
+        status = 403
+    return JSONResponse(result.to_dict(), status_code=status)
+
+
+@app.get("/api/v1")
+def api_v1_root():
+    return {
+        "ok": True,
+        "api_version": "v1",
+        "docs": "GET /api/v1/routes with Authorization bearer key",
+        "auth": "Bearer cubit_... or set CUBIT_API_OPEN=1 for local open mode",
+        "commerce": "Optional — CUBIT_COMMERCE=1 + STRIPE_SECRET_KEY",
+    }
+

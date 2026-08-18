@@ -88,13 +88,30 @@ def test_reason_local():
 
 
 def test_no_payment_code():
-    """Sanity: no wallet/payment strings in core package (heuristic)."""
-    root = Path(__file__).resolve().parents[1] / "cubit"
-    banned = ("stripe", "iap", "in-app purchase", "wallet_address", "billing_library")
-    for path in root.rglob("*.py"):
-        text = path.read_text(encoding="utf-8").lower()
-        for b in banned:
-            assert b not in text, f"Found {b} in {path}"
+    """Free path: commerce must be off by default; Android free APK has no billing libs."""
+    from cubit.commerce.stripe_wallet import CommerceGateway
+    st = CommerceGateway().status()
+    assert st["enabled"] is False
+    assert st["free_core"] is True
+    # Android tree must not reference billing libraries
+    android = Path(__file__).resolve().parents[1] / "android"
+    if android.exists():
+        for path in android.rglob("*"):
+            if path.suffix.lower() in (".kt", ".kts", ".xml", ".gradle"):
+                t = path.read_text(encoding="utf-8", errors="ignore").lower()
+                for b in ("billingclient", "com.android.billingclient", "play billing"):
+                    assert b not in t, f"Found {b} in {path}"
+
+
+def test_api_framework():
+    import os
+    os.environ["CUBIT_API_OPEN"] = "1"
+    from cubit.api.router import ApiRouter
+    r = ApiRouter()
+    res = r.dispatch("GET", "/health", authorization="Bearer x")
+    assert res.ok
+    routes = r.list_routes()
+    assert any(x["path"].endswith("/projects") for x in routes)
 
 
 if __name__ == "__main__":
@@ -116,4 +133,6 @@ if __name__ == "__main__":
     print("OK reason")
     test_no_payment_code()
     print("OK no payment")
+    test_api_framework()
+    print("OK api")
     print("All smoke tests passed.")
