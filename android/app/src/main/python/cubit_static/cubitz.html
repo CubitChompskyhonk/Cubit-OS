@@ -316,11 +316,30 @@ function nearestTribeId(x, y) {
 // Nation territory: nearest homeland among tribes (Voronoi-ish grid sample)
 let nationGrid = null;
 function rebuildNationGrid() {
-  const step = 8;
+  const step = 26;
   nationGrid = [];
+  const alive = state.metabolites.filter(m => m.alive);
   for (let y = 0; y < H; y += step) {
     for (let x = 0; x < W; x += step) {
-      nationGrid.push({ x, y, tid: nearestTribeId(x + step / 2, y + step / 2), s: step });
+      const cx = x + step / 2, cy = y + step / 2;
+      // Population-weighted claim: nearby agents own the cell; else homeland Voronoi
+      const scores = {};
+      for (const t of TRIBES) scores[t.id] = 0;
+      let claimed = false;
+      for (const m of alive) {
+        const d = Math.hypot(m.x - cx, m.y - cy);
+        if (d < step * 2.2) {
+          scores[m.tribe] += 1 / (1 + d * 0.04);
+          claimed = true;
+        }
+      }
+      let tid;
+      if (claimed) {
+        tid = Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
+      } else {
+        tid = nearestTribeId(cx, cy);
+      }
+      nationGrid.push({ x, y, tid, s: step });
     }
   }
 }
@@ -504,6 +523,8 @@ function yearTick() {
   if (state.year === state.separationYears) {
     log('Borders soften — nations begin to mingle');
   }
+  // political over-map tracks lived population
+  if (state.year % 3 === 0) rebuildNationGrid();
 
   // density stress
   let stressSum = 0;
@@ -768,7 +789,7 @@ function drawNationsOver() {
   if (!nationGrid || nationGrid.length === 0) rebuildNationGrid();
   for (const cell of nationGrid) {
     const t = tribeById(cell.tid);
-    ctx.fillStyle = t.color + '18';
+    ctx.fillStyle = t.color + '28';
     ctx.fillRect(cell.x, cell.y, cell.s, cell.s);
   }
   // borders: sample edges between different nations
