@@ -16,27 +16,46 @@ Founder → Cubit analyzes → Cubit proposes → Founder decides → System act
 
 Significant mutations require **explicit Founder approval** via the Approval Gate.
 
-## Quick start
+## Quick start (desktop / CLI)
 
 ```bash
-cd cubit_os
+cd Cubit-OS
 python -m venv .venv
-source .venv/bin/activate  # or Windows equivalent
-pip install -r requirements.txt  # optional deps for web/LLM
+source .venv/bin/activate
+pip install -r requirements.txt
 
-# CLI
 python -m cubit briefing
-python -m cubit steward
 python -m cubit chat
 python -m cubit chat "create project My Idea"
 python -m cubit chat "approve prop-001"
-
-# Web dashboard
 python -m cubit web --port 8080
-# open http://127.0.0.1:8080
 ```
 
-Optional OpenAI: set `OPENAI_API_KEY` or `CUBIT_OPENAI_API_KEY`. Without a key, `reason` falls back to local briefing text.
+Optional OpenAI: set `OPENAI_API_KEY` or `CUBIT_OPENAI_API_KEY`.
+
+## Android free APK
+
+Kotlin WebView + Chaquopy Python 3.11 shell that starts the same dashboard on `127.0.0.1:8765`.
+
+### CI (GitHub Actions)
+
+Workflow: `.github/workflows/android-apk.yml`
+
+- **Trigger:** push to `main`, tags `v*`, or manual `workflow_dispatch`
+- **Output artifact:** `CubitOS-free.apk`
+- **Tags:** also publishes to **GitHub Releases** (public download URL)
+
+No billing libraries. Debug APK (no store signing secrets required).
+
+### Build locally (optional)
+
+```bash
+# Requires JDK 17, Android SDK, Python 3.11
+rsync -a --exclude '__pycache__' cubit/ android/app/src/main/python/cubit/
+cd android
+gradle :app:assembleDebug
+# APK: app/build/outputs/apk/debug/
+```
 
 ## Core principles
 
@@ -50,19 +69,11 @@ Optional OpenAI: set `OPENAI_API_KEY` or `CUBIT_OPENAI_API_KEY`. Without a key, 
 
 **Metaphor:** Foundation before expansion. Deliberate placement of the cube.
 
-## Package layout
-
-See the recreation spec. Departments: Steward, Advisor, Historian, Builder.
-
 ## Tests
 
 ```bash
-python tests/test_smoke.py
+PYTHONPATH=. python tests/test_smoke.py
 ```
-
-## Android (optional)
-
-Chaquopy + WebView shell pointing at local uvicorn on `127.0.0.1:8765`. Free APK via GitHub Actions → Releases. No billing libraries.
 
 ## License / policy
 

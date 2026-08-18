@@ -1,0 +1,103 @@
+name: Build CubitOS free APK
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Assemble free APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Python 3.11 (Chaquopy buildPython)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Bundle Cubit Python package into Android sources
+        run: |
+          mkdir -p android/app/src/main/python
+          rsync -a --exclude '__pycache__' --exclude '*.pyc' --exclude 'data' \
+            cubit/ android/app/src/main/python/cubit/
+          # Drop any desktop data dirs; Android uses CUBIT_DATA_ROOT
+          find android/app/src/main/python -type d -name 'data' -exec rm -rf {} + 2>/dev/null || true
+          test -f android/app/src/main/python/cubit_android_server.py
+          test -d android/app/src/main/python/cubit/web
+          echo "Bundled cubit package:"
+          find android/app/src/main/python -type f | head -40
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept licenses & install platform
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build debug APK (free — no signing secrets required)
+        working-directory: android
+        run: |
+          gradle :app:assembleDebug --stacktrace --no-daemon
+
+      - name: Package CubitOS-free.apk
+        run: |
+          APK=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          echo "Found APK: $APK"
+          test -n "$APK" && test -f "$APK"
+          mkdir -p dist
+          cp "$APK" dist/CubitOS-free.apk
+          ls -lh dist/CubitOS-free.apk
+          # Optional rename for clarity
+          cp dist/CubitOS-free.apk "dist/CubitOS-free-${{ github.sha }}.apk" || true
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CubitOS-free
+          path: dist/CubitOS-free.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish to GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/CubitOS-free.apk
+          generate_release_notes: true
+          name: Cubit OS ${{ github.ref_name }}
+          body: |
+            ## Cubit OS free APK
+
+            - **No wallet, payments, subscriptions, or IAP**
+            - Local-first: Kotlin WebView + Chaquopy Python 3.11
+            - Dashboard on `http://127.0.0.1:8765`
+            - Same core as CLI / desktop web
+
+            ### Install
+            1. Download `CubitOS-free.apk`
+            2. Allow install from unknown sources if prompted
+            3. Open Cubit OS
+
+            Foundation before expansion.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

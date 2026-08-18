@@ -13,9 +13,9 @@ from cubit.governance.gate import ApprovalGate, SIGNIFICANT_ACTIONS
 from cubit.projects.agent import ProjectAgent
 from cubit.agents.task_agent import TaskAgent
 from cubit.chronicle.historian import Historian
-from cubit.utils import load_json, safe_write_json
+from cubit.utils import load_json, safe_write_json, data_root
 
-PENDING_PATH = Path(__file__).resolve().parent / "pending_proposals.json"
+PENDING_PATH = data_root() / "ai_data" / "pending_proposals.json"
 
 
 class ConversationalLayer:

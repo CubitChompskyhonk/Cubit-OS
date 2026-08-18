@@ -5,9 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from cubit.utils import load_json, safe_write_json
-
-DATA_DIR = Path(__file__).resolve().parent / "data"
+from cubit.utils import load_json, safe_write_json, data_root
+DATA_DIR = data_root() / "projects_data"
 
 
 class ProjectAgent:

@@ -8,9 +8,8 @@ from typing import Any
 from cubit.advisor.store import Advisor
 from cubit.chronicle.historian import Historian
 from cubit.journal.store import Journal
-from cubit.utils import load_json, safe_write_json
-
-DATA_DIR = Path(__file__).resolve().parent / "data"
+from cubit.utils import load_json, safe_write_json, data_root
+DATA_DIR = data_root() / "reflection_data"
 
 
 class Reflection:

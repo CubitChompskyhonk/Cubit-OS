@@ -6,3 +6,18 @@ venv/
 *.egg-info/
 .pytest_cache/
 .DS_Store
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/app/src/main/python/cubit/
+*.apk
+*.ap_
+dist/
+# Runtime data stores (generated)
+cubit/*_data/
+cubit/ai_data/

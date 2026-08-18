@@ -53,3 +53,15 @@ def ensure_dir(path: str | Path) -> Path:
     p = Path(path)
     p.mkdir(parents=True, exist_ok=True)
     return p
+
+def data_root() -> Path:
+    """Writable data root. On Android set CUBIT_DATA_ROOT to app files dir."""
+    import os
+    env = os.environ.get("CUBIT_DATA_ROOT")
+    if env:
+        root = Path(env)
+        root.mkdir(parents=True, exist_ok=True)
+        return root
+    # Default: package-local data folders (desktop / CLI)
+    return Path(__file__).resolve().parent
+
