@@ -569,15 +569,26 @@ def _make_handler():
         def _page_builder(self):
             depts = registry.list()
             rows = []
+            known = {
+                "Steward": "/dept/steward",
+                "Advisor": "/dept/advisor",
+                "Historian": "/dept/historian",
+                "Builder": "/dept/builder",
+                "Cubitz": "/dept/cubitz",
+                "Commerce": "/dept/commerce",
+            }
             for d in depts:
                 st = d.get("status", "active")
                 cls = "good" if st == "active" else "warn"
+                name = d.get("name") or ""
+                href = known.get(name)
+                title = f'<a href="{href}"><strong>{_esc(name)}</strong></a>' if href else f'<strong>{_esc(name)}</strong>'
                 rows.append(
                     f"""<div class="list-item">
                     <div class="idx">▦</div>
                     <div style="flex:1">
                       <div class="row" style="justify-content:space-between">
-                        <strong>{_esc(d.get('name'))}</strong>
+                        {title}
                         <span class="badge {cls}">{_esc(st)}</span>
                       </div>
                       <div class="muted">{_esc(d.get('description'))}</div>
@@ -742,13 +753,17 @@ def _make_handler():
             <div class="hero">
               <div class="q">Department · Cubitz</div>
               <h2>Living garden simulation</h2>
-              <p class="muted" style="margin:0">Tribes, lifecycle, economy pulse, Yahweh / Serpent. Start the world.</p>
+              <p class="muted" style="margin:0">Tribes, lifecycle, economy pulse, Yahweh / Serpent.</p>
             </div>
             <div class="card">
-              <p>Cubitz is the simulation department inside Cubit OS.</p>
-              <div class="row" style="margin-top:0.75rem">
-                <a class="btn" href="/cubitz" style="display:inline-block;text-align:center">▶ Start Cubitz</a>
+              <p><strong>Cubitz</strong> is ready. Open the world to run the simulation.</p>
+              <div class="row" style="margin-top:0.85rem;gap:0.5rem;flex-wrap:wrap">
+                <a class="btn" href="/cubitz" style="display:inline-block;text-align:center;padding:0.75rem 1.25rem">▶ Start Cubitz</a>
+                <a class="btn secondary" href="/" style="display:inline-block;text-align:center;padding:0.75rem 1rem">Home</a>
               </div>
+            </div>
+            <div class="card muted">
+              Controls inside the game: Pause · Speed · Save/Load · Yahweh Bless · Serpent Corrupt
             </div>
             """
             return _shell("Cubitz", body, active_dept="cubitz", active_nav="builder")
@@ -774,6 +789,7 @@ def _make_handler():
                 "/dept/historian": self._page_historian,
                 "/dept/builder": self._page_builder,
                 "/dept/commerce": self._page_commerce,
+                "/dept/cubitz": self._page_cubitz_dept,
                 "/journal": self._page_historian,
                 "/chronicle": self._page_historian,
             }

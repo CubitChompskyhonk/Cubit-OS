@@ -59,7 +59,22 @@ class Registry:
         self._save(data)
         return entry
 
+    def ensure_builtins(self) -> None:
+        """Ensure core departments including Cubitz exist (idempotent)."""
+        builtins = [
+            ("Steward", "Are we aligned?"),
+            ("Advisor", "What should we consider?"),
+            ("Historian", "Why did we become this?"),
+            ("Builder", "How do we create?"),
+            ("Cubitz", "Living garden simulation — start the world"),
+        ]
+        for name, desc in builtins:
+            existing = self.get(name)
+            if not existing:
+                self.register(name, description=desc, status="active")
+
     def list(self) -> list[dict[str, Any]]:
+        self.ensure_builtins()
         return self._load().get("departments", [])
 
     def get(self, name: str) -> dict[str, Any] | None:
