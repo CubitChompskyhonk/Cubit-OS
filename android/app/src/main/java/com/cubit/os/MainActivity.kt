@@ -2,10 +2,12 @@ package com.cubit.os
 
 import android.annotation.SuppressLint
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -21,9 +23,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Cubit OS free shell:
- * - Starts local stdlib HTTP server (Python / Chaquopy) on 127.0.0.1:8765
- * - WebView hosts toolbar + department UIs (Steward, Advisor, Historian, Builder)
- * - No billing, no wallet, no IAP
+ * - Local Python HTTP server + WebView departments
+ * - Media autoplay enabled for boot VOX sequence
  */
 class MainActivity : AppCompatActivity() {
 
@@ -57,8 +58,14 @@ class MainActivity : AppCompatActivity() {
         settings.setSupportZoom(false)
         settings.builtInZoomControls = false
         settings.displayZoomControls = false
+        settings.mediaPlaybackRequiresUserGesture = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            settings.mediaPlaybackRequiresUserGesture = false
+        }
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
 
         webView.setBackgroundColor(Color.parseColor("#0B0D12"))
+        webView.webChromeClient = WebChromeClient()
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {

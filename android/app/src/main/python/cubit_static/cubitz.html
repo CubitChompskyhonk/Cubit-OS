@@ -153,8 +153,26 @@
         <h3>New Tribe</h3>
         <input id="newTribeName" type="text" placeholder="Tribe name" maxlength="24"
           style="width:100%;background:#0f0f14;border:1px solid #3f3f46;color:#e4e4e7;border-radius:8px;padding:8px;margin-bottom:8px"/>
+        <div style="font-size:10px;color:#71717a;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em">Trait modifiers</div>
+        <div id="traitBoxes" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px;font-size:11px">
+          <label><input type="checkbox" data-trait="martial"/> Martial</label>
+          <label><input type="checkbox" data-trait="mercantile"/> Mercantile</label>
+          <label><input type="checkbox" data-trait="devout"/> Devout</label>
+          <label><input type="checkbox" data-trait="scholarly"/> Scholarly</label>
+          <label><input type="checkbox" data-trait="agrarian"/> Agrarian</label>
+          <label><input type="checkbox" data-trait="nomadic"/> Nomadic</label>
+        </div>
         <button id="btnFoundTribe" class="god" style="width:100%">Found tribe</button>
-        <p class="hint">Seeds 5 agents on the map and opens diplomacy.</p>
+        <p class="hint">Traits shape seed agents and tribe policy bonuses.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Society</h3>
+        <div class="stat-row"><span class="stat-label">Zeitgeist</span><span class="stat-value" id="zeitgeist">—</span></div>
+        <div class="stat-row"><span class="stat-label">Stock index</span><span class="stat-value" id="stockIndex">100</span></div>
+        <div class="stat-row"><span class="stat-label">Tax revenue</span><span class="stat-value" id="taxRev">$0</span></div>
+        <div class="stat-row"><span class="stat-label">Media mood</span><span class="stat-value" id="mediaMood">0</span></div>
+        <div class="stat-row"><span class="stat-label">Comms level</span><span class="stat-value" id="comms">1</span></div>
       </div>
 
       <div class="panel">
@@ -281,7 +299,14 @@ const state = {
   plague: 0,
   forage: {}, // regionId -> biomass
   migrationPressure: 0,
-  ecosystem: { births: 0, deaths: 0, migrations: 0, infections: 0 }
+  ecosystem: { births: 0, deaths: 0, migrations: 0, infections: 0 },
+  gov: {}, religion: {}, taxRate: {},
+  stockIndex: 100,
+  stockHistory: [],
+  mediaMood: 0, // -100..100
+  zeitgeist: 'emergence',
+  commsLevel: 1, // 1 oral 2 script 3 print 4 broadcast
+  taxRevenueYear: 0
 };
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
@@ -739,6 +764,88 @@ function yearTick() {
   if (state.weather === 'rain') state.firmament = clamp(state.firmament + 0.2, 20, 100);
 
 
+
+  // ===== SOCIETY: tax · government · religion · markets · media · zeitgeist =====
+  let taxYear = 0;
+  for (const t of TRIBES) {
+    const members = alive.filter(m => m.tribe === t.id);
+    if (!members.length) continue;
+    const rate = state.taxRate[t.id] || 0.1;
+    const gov = state.gov[t.id] || 'clan';
+    // tax collection
+    for (const m of members) {
+      const due = m.money * rate * (gov === 'merchant_league' ? 0.9 : gov === 'war_council' ? 1.15 : 1);
+      if (m.money > 5) {
+        m.money -= due;
+        taxYear += due;
+        state.treasury += due * 0.5;
+      }
+    }
+    // government effects
+    if (gov === 'war_council') members.forEach(m => { m.aggression = clamp(m.aggression + 0.4, 0, 100); });
+    if (gov === 'theocracy') members.forEach(m => { m.faith = clamp(m.faith + 0.5, 0, 100); m.belief = clamp(m.belief + 0.3, 0, 100); });
+    if (gov === 'merchant_league') members.forEach(m => { if (Math.random() < 0.05) m.money += rand(0.5, 2); });
+    // religion
+    const rel = state.religion[t.id] || 'folk';
+    if (rel === 'orthodox') members.forEach(m => { m.fearMortality = clamp((m.fearMortality||20) - 0.3, 0, 100); });
+    if (rel === 'philosophic') members.forEach(m => { m.knowledge = clamp(m.knowledge + 0.25, 0, 100); });
+  }
+  state.taxRevenueYear = taxYear;
+
+  // stock market — tracks treasury growth, trade volume, stress
+  const tradeSignal = (state.lastVolume || 0) * 0.15;
+  const stressPenalty = state.globalStress * 0.08;
+  const warPenalty = state.wars.length * 1.2;
+  const plaguePenalty = (state.plague || 0) * 0.5;
+  let delta = (taxYear * 0.02) + tradeSignal - stressPenalty - warPenalty - plaguePenalty + rand(-1.5, 1.5);
+  // media amplifies swings
+  delta *= 1 + Math.abs(state.mediaMood) * 0.004;
+  state.stockIndex = clamp(state.stockIndex + delta, 20, 400);
+  state.stockHistory.push(state.stockIndex);
+  if (state.stockHistory.length > 40) state.stockHistory.shift();
+  // agents with money lightly affected by market
+  if (Math.abs(delta) > 2) {
+    alive.forEach(m => {
+      if (m.money > 20) m.money = Math.max(0, m.money + delta * 0.02);
+    });
+  }
+
+  // communication level rises slowly with knowledge + population
+  const avgKnow = alive.length ? alive.reduce((s, m) => s + m.knowledge, 0) / alive.length : 0;
+  if (alive.length > 60 && avgKnow > 35 && state.commsLevel < 2) { state.commsLevel = 2; log('Script spreads — communication level 2'); }
+  if (alive.length > 100 && avgKnow > 50 && state.commsLevel < 3) { state.commsLevel = 3; log('Print culture — communication level 3'); }
+  if (alive.length > 140 && avgKnow > 65 && state.commsLevel < 4) { state.commsLevel = 4; log('Broadcast age — communication level 4'); }
+
+  // media mood: diplomacy average, wars, market, plague
+  let dipSum = 0, dipN = 0;
+  for (let i = 0; i < TRIBES.length; i++)
+    for (let j = i + 1; j < TRIBES.length; j++) {
+      dipSum += relation(TRIBES[i].id, TRIBES[j].id); dipN++;
+    }
+  const avgDip = dipN ? dipSum / dipN : 0;
+  state.mediaMood = clamp(
+    avgDip * 0.4 + (state.stockIndex - 100) * 0.25 - state.wars.length * 12 - (state.plague || 0) * 3 + rand(-5, 5),
+    -100, 100
+  );
+  // media feeds fear/faith
+  alive.forEach(m => {
+    if (state.mediaMood < -30) m.fear = clamp(m.fear + 0.4 * (state.commsLevel / 2), 0, 100);
+    if (state.mediaMood > 30) m.faith = clamp(m.faith + 0.25 * (state.commsLevel / 2), 0, 100);
+  });
+
+  // zeitgeist labels
+  const zg = [];
+  if (state.wars.length >= 2) zg.push('conflict');
+  if (state.stockIndex > 140) zg.push('boom');
+  if (state.stockIndex < 70) zg.push('bust');
+  if ((state.plague || 0) > 5) zg.push('plague');
+  if (avgDip > 30) zg.push('entente');
+  if (state.globalStress > 55) zg.push('anxiety');
+  if (avgKnow > 55) zg.push('enlightenment');
+  if (season === 0 && state.mediaMood > 10) zg.push('renewal');
+  state.zeitgeist = zg.length ? zg.join(' · ') : 'equilibrium';
+
+
   // --- Dynamic diplomacy ---
   const tribeIds = TRIBES.map(t => t.id);
   for (let i = 0; i < tribeIds.length; i++) {
@@ -1133,6 +1240,16 @@ function render() {
   document.getElementById('corruption').textContent = state.corruption.toFixed(0) + '%';
   document.getElementById('stress').textContent = state.globalStress.toFixed(0);
   document.getElementById('wars').textContent = state.wars.length;
+  const zg = document.getElementById('zeitgeist');
+  if (zg) zg.textContent = state.zeitgeist || '—';
+  const si = document.getElementById('stockIndex');
+  if (si) si.textContent = (state.stockIndex || 100).toFixed(0);
+  const tr = document.getElementById('taxRev');
+  if (tr) tr.textContent = '$' + (state.taxRevenueYear || 0).toFixed(0);
+  const mm = document.getElementById('mediaMood');
+  if (mm) mm.textContent = (state.mediaMood || 0).toFixed(0);
+  const cl = document.getElementById('comms');
+  if (cl) cl.textContent = (state.commsLevel || 1) + ' (' + ['','oral','script','print','broadcast'][state.commsLevel||1] + ')';
   const seasonNames = ['Spring','Summer','Autumn','Winter'];
   const se = document.getElementById('season');
   if (se) se.textContent = seasonNames[state.season] || '—';
@@ -1239,7 +1356,7 @@ function createNewTribe(nameOpt) {
   const input = document.getElementById('newTribeName');
   const name = (nameOpt != null ? nameOpt : (input ? input.value : '')).trim();
   if (!name) {
-    log('Enter a tribe name in the New Tribe panel, then Found tribe');
+    log('Enter a tribe name, pick traits, then Found tribe');
     const panel = document.getElementById('tribeCreator');
     if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     if (input) input.focus();
@@ -1251,34 +1368,65 @@ function createNewTribe(nameOpt) {
     log('Tribe already exists: ' + name);
     return;
   }
+  const traits = [];
+  document.querySelectorAll('#traitBoxes input[data-trait]:checked').forEach(el => traits.push(el.getAttribute('data-trait')));
   const x = 0.12 + Math.random() * 0.76;
   const y = 0.12 + Math.random() * 0.76;
   const hues = ['#f472b6','#c084fc','#22d3ee','#a3e635','#fb923c','#e879f9','#2dd4bf','#fbbf24'];
   const color = hues[TRIBES.length % hues.length];
-  const tribe = { id, name, color, x, y };
+  const tribe = {
+    id, name, color, x, y,
+    traits: traits.slice(),
+    mods: traitMods(traits)
+  };
   TRIBES.push(tribe);
   if (!state.diplomacy) state.diplomacy = {};
   if (!state.diplomacy[id]) state.diplomacy[id] = {};
   for (const o of TRIBES) {
     if (!state.diplomacy[o.id]) state.diplomacy[o.id] = {};
-    if (o.id === id) {
-      state.diplomacy[id][id] = 100;
-      continue;
-    }
+    if (o.id === id) { state.diplomacy[id][id] = 100; continue; }
     state.diplomacy[id][o.id] = 0;
     state.diplomacy[o.id][id] = 0;
   }
+  // government / religion defaults influenced by traits
+  if (!state.gov) state.gov = {};
+  if (!state.religion) state.religion = {};
+  state.gov[id] = traits.includes('martial') ? 'war_council' : traits.includes('mercantile') ? 'merchant_league' : traits.includes('devout') ? 'theocracy' : 'clan';
+  state.religion[id] = traits.includes('devout') ? 'orthodox' : traits.includes('scholarly') ? 'philosophic' : 'folk';
+  state.taxRate = state.taxRate || {};
+  state.taxRate[id] = traits.includes('mercantile') ? 0.12 : traits.includes('agrarian') ? 0.08 : 0.1;
+
   for (let i = 0; i < 5; i++) {
-    state.metabolites.push(createMetabolite({
-      tribe, spread: 26, age: rand(6, 22), money: rand(12, 32), belief: rand(45, 85)
-    }));
+    const opts = {
+      tribe, spread: traits.includes('nomadic') ? 40 : 26,
+      age: rand(6, 22), money: rand(12, 32) * (traits.includes('mercantile') ? 1.4 : 1),
+      belief: rand(45, 85) + (traits.includes('devout') ? 10 : 0),
+      knowledge: rand(8, 35) + (traits.includes('scholarly') ? 15 : 0)
+    };
+    const agent = createMetabolite(opts);
+    if (traits.includes('martial')) { agent.aggression = clamp(agent.aggression + 15, 0, 100); agent.mass *= 1.08; }
+    if (traits.includes('agrarian')) { agent.goods.grain = (agent.goods.grain || 0) + 3; agent.metabolism *= 0.95; }
+    if (traits.includes('nomadic')) { agent.vx *= 1.5; agent.vy *= 1.5; }
+    state.metabolites.push(agent);
   }
   rebuildNationGrid();
   refreshNationSelect(true);
   if (input) input.value = '';
-  log('New tribe founded: ' + tribe.name + ' · ' + color);
+  document.querySelectorAll('#traitBoxes input[data-trait]').forEach(el => { el.checked = false; });
+  log('New tribe founded: ' + tribe.name + (traits.length ? ' [' + traits.join(', ') + ']' : ''));
   const sel = document.getElementById('nationTarget');
   if (sel) sel.value = id;
+}
+
+function traitMods(traits) {
+  const m = { aggression: 0, trade: 0, faith: 0, knowledge: 0, forage: 0, mobility: 0 };
+  if (traits.includes('martial')) m.aggression += 12;
+  if (traits.includes('mercantile')) m.trade += 0.2;
+  if (traits.includes('devout')) m.faith += 15;
+  if (traits.includes('scholarly')) m.knowledge += 12;
+  if (traits.includes('agrarian')) m.forage += 0.25;
+  if (traits.includes('nomadic')) m.mobility += 0.3;
+  return m;
 }
 
 function grantToNation(nationId, kind) {
@@ -1465,6 +1613,13 @@ function boot() {
   resize();
   rebuildNationGrid();
   for (const r of REGIONS) state.forage[r.id] = 40 + r.fertility * 40;
+  for (const t of TRIBES) {
+    state.gov[t.id] = state.gov[t.id] || 'clan';
+    state.religion[t.id] = state.religion[t.id] || 'folk';
+    state.taxRate[t.id] = state.taxRate[t.id] || 0.1;
+    if (!t.traits) t.traits = [];
+    if (!t.mods) t.mods = traitMods(t.traits || []);
+  }
   // Tribes separated at first — tight homeland clusters only
   for (const t of TRIBES) {
     const n = 5 + Math.floor(Math.random() * 3);

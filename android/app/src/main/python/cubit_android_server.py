@@ -261,39 +261,52 @@ def _splash() -> str:
   <div class="cube-big">C</div>
   <h1>Cubit OS</h1>
   <p>Foundation before expansion</p>
-  <audio id="boot-audio" src="/static/VOX_BIBLICAL_888.wav" preload="auto"></audio>
+  <audio id="boot-audio" src="/static/VOX_BIBLICAL_888.wav" preload="auto" playsinline></audio>
 </div>
 <script>
 (function(){
   const s = document.getElementById('cubit-splash');
   const a = document.getElementById('boot-audio');
   let done = false;
-  function go(){
+  function enterApp(){
     if (done) return;
     done = true;
     if(s){ s.classList.add('hide'); setTimeout(function(){ if(s&&s.parentNode)s.remove(); },700); }
   }
-  if (!a) { setTimeout(go, 800); return; }
-  a.volume = 0.9;
-  a.onended = function(){ go(); };
-  a.onerror = function(){ setTimeout(go, 600); };
-  var pr = a.play();
-  if (pr && pr.then) {
-    pr.then(function(){ setTimeout(function(){ if(!done) go(); }, 20000); })
-      .catch(function(){
-        var tip = document.createElement('p');
-        tip.style.cssText = 'color:#fcd34d;margin-top:1rem;cursor:pointer;font-size:0.9rem';
-        tip.textContent = 'Tap to begin';
-        if(s) s.appendChild(tip);
-        function unlock(){
-          a.play().then(function(){}).catch(function(){ go(); });
-          document.body.removeEventListener('click', unlock);
-          document.body.removeEventListener('touchstart', unlock);
-        }
-        document.body.addEventListener('click', unlock, {once:true});
-        document.body.addEventListener('touchstart', unlock, {once:true});
-      });
-  } else setTimeout(go, 2000);
+  function showTap(){
+    if (!s || document.getElementById('boot-tap')) return;
+    var tip = document.createElement('button');
+    tip.id = 'boot-tap';
+    tip.textContent = 'Enter Cubit OS';
+    tip.style.cssText = 'margin-top:1.25rem;padding:0.7rem 1.4rem;border-radius:10px;border:1px solid #f59e0b;background:#f59e0b;color:#0b0d12;font-weight:800;font-size:0.95rem;cursor:pointer';
+    s.appendChild(tip);
+    tip.onclick = function(){ playFull(); };
+  }
+  function playFull(){
+    if (!a) { enterApp(); return; }
+    a.currentTime = 0;
+    a.volume = 1.0;
+    a.onended = function(){ enterApp(); };
+    a.onerror = function(){ enterApp(); };
+    var pr = a.play();
+    if (pr && pr.then) {
+      pr.then(function(){ setTimeout(function(){ if(!done) enterApp(); }, 22000); })
+        .catch(function(){ showTap(); });
+    } else setTimeout(enterApp, 2000);
+  }
+  if (a) {
+    a.preload = 'auto';
+    try { a.load(); } catch(e) {}
+    setTimeout(function(){
+      var pr = a.play();
+      if (pr && pr.then) {
+        pr.then(function(){
+          a.onended = function(){ enterApp(); };
+          setTimeout(function(){ if(!done) enterApp(); }, 22000);
+        }).catch(function(){ showTap(); });
+      } else showTap();
+    }, 300);
+  } else setTimeout(enterApp, 800);
 })();
 </script>
 """
@@ -890,7 +903,14 @@ def _make_handler():
                         if name.endswith(".wav"): ctype = "audio/wav"
                         elif name.endswith(".css"): ctype = "text/css"
                         elif name.endswith(".html"): ctype = "text/html"
-                        return self._send(200, data, content_type=ctype)
+                        self.send_response(200)
+                        self.send_header("Content-Type", ctype)
+                        self.send_header("Content-Length", str(len(data)))
+                        self.send_header("Accept-Ranges", "bytes")
+                        self.send_header("Cache-Control", "public, max-age=3600")
+                        self.end_headers()
+                        self.wfile.write(data)
+                        return
                 return self._send(404, "missing", content_type="text/plain")
             if path == "/cubitz":
                 return self._send(200, _load_cubitz_html())
