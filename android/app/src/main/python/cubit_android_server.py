@@ -1,7 +1,13 @@
-"""Bootstrap Cubit on Android via Chaquopy — stdlib HTTP server only.
+"""Cubit OS Android UI — toolbar + department interfaces (stdlib HTTP).
 
-No fastapi/uvicorn/pydantic (native wheels unavailable on Android).
-Serves the same control flow: chat, briefing, proposals approve/reject.
+Departments:
+  Steward  — Are we aligned?
+  Advisor  — What should we consider?
+  Historian — Why did we become this?
+  Builder  — How do we create?
+
+Plus Chat, Briefing, Projects, Tasks.
+No fastapi/uvicorn/pydantic (Android wheels).
 """
 from __future__ import annotations
 
@@ -11,7 +17,7 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
 
 _server_thread: threading.Thread | None = None
 _started = False
@@ -24,68 +30,273 @@ def _ensure_cubit_on_path() -> None:
         sys.path.insert(0, str(here))
 
 
-def _html_page(title: str, body: str, steward: dict | None = None) -> str:
-    focus = ""
-    if steward:
-        aligned = steward.get("aligned")
-        badge = "Aligned" if aligned else "Review"
-        focus = f"""
-        <aside class="focus">
-          <h3>Steward</h3>
-          <p><span class="badge">{badge}</span></p>
-          <p class="muted">Focus: {steward.get('focus_status')}</p>
-          <p class="muted">Projects: {steward.get('project_count')}</p>
-          <p class="muted">Exec rate: {steward.get('execution_rate')}%</p>
-        </aside>"""
+def _esc(s) -> str:
+    return (
+        str(s if s is not None else "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+# ── Shared CSS / chrome ──────────────────────────────────────────────
+
+CSS = """
+:root {
+  --bg: #0b0d12;
+  --panel: #141820;
+  --panel2: #1a1f2b;
+  --border: #2a3140;
+  --text: #e8eaef;
+  --muted: #8b93a7;
+  --accent: #6c9eff;
+  --accent2: #8b7cff;
+  --good: #3dd68c;
+  --warn: #f5a524;
+  --bad: #f76b6b;
+  --toolbar-h: 56px;
+  --bottom-h: 64px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+  overflow-x: hidden;
+}
+a { color: var(--accent); text-decoration: none; }
+button, .btn {
+  font: inherit; cursor: pointer; border: none; border-radius: 10px;
+  padding: 0.55rem 1rem; font-weight: 600;
+  background: var(--accent); color: #0b0d12;
+}
+button.secondary, .btn.secondary { background: var(--panel2); color: var(--text); border: 1px solid var(--border); }
+button.good { background: var(--good); color: #0b0d12; }
+button.danger { background: var(--bad); color: #fff; }
+button.warn { background: var(--warn); color: #0b0d12; }
+button:active { opacity: 0.85; transform: scale(0.98); }
+input[type=text], textarea, select {
+  width: 100%; background: #0f1218; border: 1px solid var(--border);
+  color: var(--text); border-radius: 10px; padding: 0.65rem 0.85rem; font: inherit;
+}
+textarea { min-height: 88px; resize: vertical; }
+.muted { color: var(--muted); font-size: 0.9rem; }
+.badge {
+  display: inline-block; font-size: 0.72rem; padding: 0.18rem 0.55rem;
+  border-radius: 999px; background: #252a35; color: var(--muted); font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.badge.good { background: #163527; color: var(--good); }
+.badge.warn { background: #3a2a12; color: var(--warn); }
+.badge.bad { background: #3a1616; color: var(--bad); }
+.badge.accent { background: #1a2740; color: var(--accent); }
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 14px; padding: 1rem; margin-bottom: 0.85rem;
+}
+.card h3 { margin: 0 0 0.35rem; font-size: 1rem; }
+.stat-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin: 0.75rem 0;
+}
+.stat {
+  background: var(--panel2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 0.75rem;
+}
+.stat .label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.stat .value { font-size: 1.25rem; font-weight: 700; margin-top: 0.2rem; }
+.row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.stack { display: flex; flex-direction: column; gap: 0.55rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.55rem 0.35rem; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 500; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+pre { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 0.86rem; margin: 0; }
+
+/* Toolbar */
+.toolbar {
+  position: sticky; top: 0; z-index: 50;
+  height: var(--toolbar-h);
+  display: flex; align-items: center; gap: 0.65rem;
+  padding: 0 0.85rem;
+  background: linear-gradient(180deg, #12151c 0%, #0e1118 100%);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+}
+.toolbar .brand {
+  display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 1.05rem;
+  flex: 1; min-width: 0;
+}
+.toolbar .cube {
+  width: 28px; height: 28px; border-radius: 7px;
+  background: linear-gradient(135deg, #6c9eff, #8b7cff);
+  display: grid; place-items: center; color: #0b0d12; font-size: 0.85rem; font-weight: 800;
+}
+.toolbar .subtitle { font-size: 0.72rem; color: var(--muted); font-weight: 500; display: block; }
+.toolbar-actions { display: flex; gap: 0.35rem; }
+.icon-btn {
+  width: 40px; height: 40px; border-radius: 10px; background: var(--panel2);
+  border: 1px solid var(--border); color: var(--text);
+  display: grid; place-items: center; padding: 0; font-size: 1.05rem;
+}
+
+/* Page shell */
+.page {
+  padding: 0.9rem 0.9rem calc(var(--bottom-h) + var(--safe-bottom) + 1rem);
+  max-width: 720px; margin: 0 auto; min-height: calc(100vh - var(--toolbar-h));
+}
+.page-title { margin: 0 0 0.25rem; font-size: 1.35rem; font-weight: 700; }
+.page-desc { margin: 0 0 1rem; color: var(--muted); font-size: 0.9rem; }
+.section-label {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); margin: 1.1rem 0 0.5rem; font-weight: 600;
+}
+
+/* Bottom nav */
+.bottom-nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  height: calc(var(--bottom-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  display: flex; justify-content: space-around; align-items: flex-start;
+  background: #10131a; border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.35);
+}
+.bottom-nav a {
+  flex: 1; text-align: center; padding: 0.45rem 0.15rem 0.35rem;
+  color: var(--muted); font-size: 0.65rem; font-weight: 600;
+  display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
+}
+.bottom-nav a .ico { font-size: 1.2rem; line-height: 1; }
+.bottom-nav a.active { color: var(--accent); }
+.bottom-nav a:active { opacity: 0.8; }
+
+/* Dept chips (secondary nav under toolbar) */
+.dept-bar {
+  display: flex; gap: 0.4rem; overflow-x: auto; padding: 0.55rem 0.9rem;
+  background: var(--panel); border-bottom: 1px solid var(--border);
+  -webkit-overflow-scrolling: touch;
+}
+.dept-bar::-webkit-scrollbar { display: none; }
+.dept-chip {
+  flex: 0 0 auto; padding: 0.4rem 0.75rem; border-radius: 999px;
+  background: var(--panel2); border: 1px solid var(--border);
+  color: var(--muted); font-size: 0.78rem; font-weight: 600;
+}
+.dept-chip.active { background: #1a2740; border-color: var(--accent); color: var(--accent); }
+
+/* Chat */
+.chat-log {
+  min-height: 220px; max-height: 42vh; overflow-y: auto;
+  padding: 0.5rem; margin-bottom: 0.65rem;
+}
+.msg { margin-bottom: 0.7rem; white-space: pre-wrap; font-size: 0.92rem; }
+.msg.user { color: var(--accent); }
+.msg.bot { color: var(--text); }
+.composer {
+  display: flex; gap: 0.45rem; position: sticky; bottom: calc(var(--bottom-h) + var(--safe-bottom) + 0.4rem);
+  background: var(--bg); padding: 0.4rem 0;
+}
+
+/* Hero / department header cards */
+.hero {
+  background: linear-gradient(135deg, #1a2240 0%, #1a1830 50%, #141820 100%);
+  border: 1px solid var(--border); border-radius: 16px; padding: 1.15rem;
+  margin-bottom: 1rem;
+}
+.hero .q { font-size: 0.8rem; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.hero h2 { margin: 0.25rem 0 0.35rem; font-size: 1.2rem; }
+.list-item {
+  display: flex; gap: 0.65rem; align-items: flex-start;
+  padding: 0.75rem 0; border-bottom: 1px solid var(--border);
+}
+.list-item:last-child { border-bottom: none; }
+.list-item .idx {
+  width: 28px; height: 28px; border-radius: 8px; background: var(--panel2);
+  display: grid; place-items: center; font-size: 0.75rem; color: var(--muted); flex-shrink: 0;
+}
+.empty { text-align: center; padding: 1.5rem 1rem; color: var(--muted); }
+.form-actions { display: flex; gap: 0.5rem; margin-top: 0.65rem; }
+.progress {
+  height: 8px; background: #252a35; border-radius: 999px; overflow: hidden; margin-top: 0.4rem;
+}
+.progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--good)); border-radius: 999px; }
+"""
+
+
+def _toolbar(active: str = "") -> str:
+    return f"""
+<header class="toolbar">
+  <div class="brand">
+    <div class="cube">C</div>
+    <div>
+      Cubit OS
+      <span class="subtitle">Operations Manager</span>
+    </div>
+  </div>
+  <div class="toolbar-actions">
+    <a class="icon-btn" href="/briefing" title="Briefing">📋</a>
+    <a class="icon-btn" href="/" title="Chat">💬</a>
+  </div>
+</header>
+<div class="dept-bar">
+  <a class="dept-chip {'active' if active=='steward' else ''}" href="/dept/steward">Steward</a>
+  <a class="dept-chip {'active' if active=='advisor' else ''}" href="/dept/advisor">Advisor</a>
+  <a class="dept-chip {'active' if active=='historian' else ''}" href="/dept/historian">Historian</a>
+  <a class="dept-chip {'active' if active=='builder' else ''}" href="/dept/builder">Builder</a>
+  <a class="dept-chip {'active' if active=='projects' else ''}" href="/projects">Projects</a>
+  <a class="dept-chip {'active' if active=='tasks' else ''}" href="/tasks">Tasks</a>
+</div>
+"""
+
+
+def _bottom_nav(active: str = "chat") -> str:
+    items = [
+        ("chat", "/", "💬", "Chat"),
+        ("steward", "/dept/steward", "◎", "Steward"),
+        ("advisor", "/dept/advisor", "◇", "Advisor"),
+        ("historian", "/dept/historian", "◷", "History"),
+        ("builder", "/dept/builder", "▦", "Builder"),
+    ]
+    links = []
+    for key, href, ico, label in items:
+        cls = "active" if active == key else ""
+        links.append(f'<a class="{cls}" href="{href}"><span class="ico">{ico}</span>{label}</a>')
+    return f'<nav class="bottom-nav">{"".join(links)}</nav>'
+
+
+def _shell(title: str, body: str, active_dept: str = "", active_nav: str = "chat") -> str:
     return f"""<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>{title} — Cubit OS</title>
-<style>
-:root {{ --bg:#0f1115; --panel:#1a1d24; --border:#2a2f3a; --text:#e6e8ec; --muted:#8b93a7; --accent:#6c9eff; --good:#3dd68c; --bad:#f76b6b; }}
-* {{ box-sizing:border-box; }}
-body {{ margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }}
-a {{ color:var(--accent); text-decoration:none; }}
-.layout {{ display:grid; grid-template-columns:200px 1fr 240px; min-height:100vh; }}
-@media(max-width:800px) {{ .layout {{ grid-template-columns:1fr; }} .side,.focus {{ display:none; }} }}
-.side,.focus {{ background:var(--panel); border-right:1px solid var(--border); padding:1rem; }}
-.focus {{ border-right:none; border-left:1px solid var(--border); }}
-.main {{ padding:1.25rem; max-width:900px; }}
-nav a {{ display:block; padding:.4rem .6rem; color:var(--muted); border-radius:6px; margin-bottom:.2rem; }}
-nav a:hover {{ background:#252a35; color:var(--text); }}
-.card {{ background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:1rem; margin-bottom:1rem; }}
-.badge {{ display:inline-block; font-size:.75rem; padding:.15rem .5rem; border-radius:999px; background:#252a35; color:var(--muted); }}
-.muted {{ color:var(--muted); font-size:.9rem; }}
-input[type=text] {{ width:100%; background:#12151b; border:1px solid var(--border); color:var(--text); border-radius:8px; padding:.6rem; font:inherit; }}
-button {{ background:var(--accent); color:#0b0d12; border:none; border-radius:8px; padding:.55rem 1rem; font-weight:600; cursor:pointer; font:inherit; }}
-button.good {{ background:var(--good); }} button.danger {{ background:var(--bad); color:#fff; }}
-.chat-log {{ min-height:280px; max-height:50vh; overflow-y:auto; white-space:pre-wrap; }}
-.msg {{ margin-bottom:.75rem; }} .msg.user {{ color:var(--accent); }}
-.row {{ display:flex; gap:.5rem; margin-top:.5rem; }}
-pre {{ white-space:pre-wrap; }}
-table {{ width:100%; border-collapse:collapse; }} th,td {{ text-align:left; padding:.5rem; border-bottom:1px solid var(--border); }}
-</style></head>
-<body><div class="layout">
-<aside class="side"><h2>Cubit</h2><p class="muted">AI Operations Manager</p>
-<nav>
-<a href="/">Chat</a><a href="/briefing">Briefing</a><a href="/projects">Projects</a>
-<a href="/tasks">Tasks</a><a href="/journal">Journal</a><a href="/chronicle">Chronicle</a>
-</nav>
-<p class="muted" style="margin-top:2rem;font-size:.8rem;">Foundation before expansion.</p>
-</aside>
-<main class="main">{body}</main>
-{focus}
-</div></body></html>"""
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="theme-color" content="#0b0d12"/>
+<title>{_esc(title)} — Cubit OS</title>
+<style>{CSS}</style>
+</head>
+<body>
+{_toolbar(active_dept)}
+<div class="page">
+{body}
+</div>
+{_bottom_nav(active_nav)}
+</body>
+</html>"""
 
 
 def _make_handler():
     from cubit.ai.briefing_builder import BriefingBuilder
     from cubit.ai.conversation import ConversationalLayer
-    from cubit.council.steward import Steward
-    from cubit.projects.agent import ProjectAgent
+    from cubit.advisor.store import Advisor
     from cubit.agents.task_agent import TaskAgent
-    from cubit.journal.store import Journal
+    from cubit.builder.department import Builder
     from cubit.chronicle.historian import Historian
+    from cubit.council.steward import Steward
+    from cubit.journal.store import Journal
+    from cubit.projects.agent import ProjectAgent
+    from cubit.registry.store import Registry
 
     cl = ConversationalLayer()
     briefing = BriefingBuilder()
@@ -94,16 +305,20 @@ def _make_handler():
     tasks = TaskAgent()
     journal = Journal()
     historian = Historian()
+    advisor = Advisor()
+    registry = Registry()
+    builder = Builder(registry=registry, historian=historian, journal=journal)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
-            pass  # quiet
+            pass
 
         def _send(self, code: int, body: str | bytes, content_type: str = "text/html; charset=utf-8"):
             data = body.encode("utf-8") if isinstance(body, str) else body
             self.send_response(code)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(data)
 
@@ -118,124 +333,438 @@ def _make_handler():
             except json.JSONDecodeError:
                 return {}
 
+        # ── pages ────────────────────────────────────────────────
+
+        def _page_chat(self):
+            pending = cl.get_pending()
+            pending_html = ""
+            if pending:
+                cards = []
+                for p in pending:
+                    cards.append(
+                        f"""<div class="card">
+                        <div class="row" style="justify-content:space-between">
+                          <span class="badge accent">{_esc(p.get('id'))}</span>
+                          <span class="badge">{_esc(p.get('action'))}</span>
+                        </div>
+                        <p style="margin:.5rem 0">{_esc(p.get('description'))}</p>
+                        <p class="muted" style="margin:0 0 .5rem">{_esc(p.get('risk_notes',''))}</p>
+                        <div class="row">
+                          <button class="good" onclick="approve('{_esc(p.get('id'))}')">Approve</button>
+                          <button class="danger" onclick="reject('{_esc(p.get('id'))}')">Reject</button>
+                        </div></div>"""
+                    )
+                pending_html = '<div class="section-label">Pending proposals</div>' + "".join(cards)
+
+            body = f"""
+            <h1 class="page-title">Chat</h1>
+            <p class="page-desc">Cubit proposes. You decide. Significant actions require approval.</p>
+            <div id="log" class="chat-log card"></div>
+            <div class="composer">
+              <input type="text" id="msg" placeholder="create project… · status · help" autocomplete="off"/>
+              <button onclick="send()">Send</button>
+            </div>
+            {pending_html}
+            <script>
+            const log=document.getElementById('log');
+            function add(role,t){{const d=document.createElement('div');d.className='msg '+role;
+              d.textContent=(role==='user'?'You: ':'Cubit: ')+t;log.appendChild(d);log.scrollTop=log.scrollHeight;}}
+            async function send(){{const i=document.getElementById('msg');const t=i.value.trim();if(!t)return;
+              add('user',t);i.value='';
+              const r=await fetch('/api/chat',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{message:t}})}});
+              const d=await r.json();add('bot',d.message||JSON.stringify(d));
+              if(d.pending&&d.pending.length) setTimeout(()=>location.reload(),400);}}
+            async function approve(id){{const r=await fetch('/api/proposals/'+id+'/approve',{{method:'POST'}});
+              const d=await r.json();add('bot','Approved '+id+': '+(d.execution?d.execution.status:JSON.stringify(d)));
+              setTimeout(()=>location.reload(),500);}}
+            async function reject(id){{const r=await fetch('/api/proposals/'+id+'/reject',{{method:'POST'}});
+              const d=await r.json();add('bot',d.message||JSON.stringify(d));setTimeout(()=>location.reload(),500);}}
+            document.getElementById('msg').addEventListener('keydown',e=>{{if(e.key==='Enter')send();}});
+            </script>"""
+            return _shell("Chat", body, active_nav="chat")
+
+        def _page_steward(self):
+            r = steward.review()
+            aligned = r.get("aligned")
+            focus = r.get("focus_status", "")
+            focus_cls = "good" if focus == "MANAGEABLE" else ("warn" if focus == "STRETCHED" else "bad")
+            rate = float(r.get("execution_rate") or 0)
+            body = f"""
+            <div class="hero">
+              <div class="q">Department · Steward</div>
+              <h2>Are we aligned?</h2>
+              <p class="muted" style="margin:0">Purpose, focus load, and execution health — deterministic governance, not a chat persona.</p>
+            </div>
+            <div class="row" style="margin-bottom:.75rem">
+              <span class="badge {'good' if aligned else 'warn'}">{'Aligned' if aligned else 'Needs review'}</span>
+              <span class="badge {focus_cls}">{_esc(focus)}</span>
+              <span class="badge">Purpose {_esc(r.get('purpose_status'))}</span>
+            </div>
+            <div class="stat-grid">
+              <div class="stat"><div class="label">Projects</div><div class="value">{r.get('project_count',0)}</div></div>
+              <div class="stat"><div class="label">Exec rate</div><div class="value">{rate}%</div>
+                <div class="progress"><span style="width:{min(rate,100)}%"></span></div>
+              </div>
+              <div class="stat"><div class="label">Open</div><div class="value">{r.get('task_stats',{}).get('open',0)}</div></div>
+              <div class="stat"><div class="label">In progress</div><div class="value">{r.get('task_stats',{}).get('in_progress',0)}</div></div>
+            </div>
+            <div class="card">
+              <h3>Purpose statement</h3>
+              <p class="muted" style="margin:0">{_esc(r.get('purpose_statement'))}</p>
+            </div>
+            <div class="card">
+              <h3>Focus heuristic</h3>
+              <p class="muted" style="margin:0 0 .5rem">Open + in-progress tasks: <strong>{r.get('open_in_progress',0)}</strong></p>
+              <p class="muted" style="margin:0">MANAGEABLE ≤3 projects & ≤8 open/IP · STRETCHED ≤6 & ≤15 · else OVERLOADED. Aligned when purpose is DEFINED and focus is not OVERLOADED.</p>
+            </div>
+            <div class="row">
+              <a class="btn secondary" href="/briefing">Open briefing</a>
+              <a class="btn secondary" href="/">Discuss in chat</a>
+            </div>"""
+            return _shell("Steward", body, active_dept="steward", active_nav="steward")
+
+        def _page_advisor(self):
+            open_recs = advisor.list(status="open")
+            closed = advisor.list(status="closed")[:5]
+            cards = []
+            for rec in open_recs:
+                cards.append(
+                    f"""<div class="card">
+                    <div class="row" style="justify-content:space-between">
+                      <span class="badge accent">{_esc(rec.get('id'))}</span>
+                      <span class="badge">open</span>
+                    </div>
+                    <h3 style="margin-top:.55rem">{_esc(rec.get('recommendation') or rec.get('observation'))}</h3>
+                    <p class="muted">{_esc(rec.get('observation'))}</p>
+                    <p class="muted" style="font-size:.82rem">Evidence: {_esc(rec.get('evidence') or '—')}</p>
+                    <button class="secondary" onclick="closeRec('{_esc(rec.get('id'))}')">Close</button>
+                    </div>"""
+                )
+            if not cards:
+                cards.append('<div class="card empty">No open recommendations. Add one below.</div>')
+
+            body = f"""
+            <div class="hero">
+              <div class="q">Department · Advisor</div>
+              <h2>What should we consider?</h2>
+              <p class="muted" style="margin:0">Structured recommendations — observation, evidence, action.</p>
+            </div>
+            <div class="section-label">Open recommendations ({len(open_recs)})</div>
+            {''.join(cards)}
+            <div class="section-label">Add recommendation</div>
+            <div class="card stack">
+              <input type="text" id="obs" placeholder="Observation"/>
+              <input type="text" id="ev" placeholder="Evidence (optional)"/>
+              <input type="text" id="rec" placeholder="Recommendation"/>
+              <div class="form-actions">
+                <button onclick="addRec()">Propose add</button>
+              </div>
+              <p class="muted" style="margin:0">Creates a proposal when gated; here we record via approval flow from chat, or direct add for Advisor store.</p>
+            </div>
+            <script>
+            async function addRec(){{
+              const observation=document.getElementById('obs').value.trim();
+              const evidence=document.getElementById('ev').value.trim();
+              const recommendation=document.getElementById('rec').value.trim();
+              if(!observation&&!recommendation){{alert('Need observation or recommendation');return;}}
+              const r=await fetch('/api/advisor/add',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+                body:JSON.stringify({{observation,evidence,recommendation}})}});
+              const d=await r.json();
+              if(d.error) alert(d.error); else location.reload();
+            }}
+            async function closeRec(id){{
+              const r=await fetch('/api/advisor/close',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+                body:JSON.stringify({{id}})}});
+              const d=await r.json();
+              if(d.error) alert(d.error); else location.reload();
+            }}
+            </script>"""
+            return _shell("Advisor", body, active_dept="advisor", active_nav="advisor")
+
+        def _page_historian(self):
+            events = list(reversed(historian.get_events()))
+            decisions = [e for e in reversed(journal.recent(20)) if e.get("type") == "decision"]
+            lessons = [e for e in reversed(journal.recent(20)) if e.get("type") == "lesson"]
+
+            ev_html = []
+            for e in events[:25]:
+                ev_html.append(
+                    f"""<div class="list-item">
+                    <div class="idx">◷</div>
+                    <div>
+                      <div class="muted" style="font-size:.75rem">{_esc(str(e.get('date',''))[:19])}</div>
+                      <strong>{_esc(e.get('event'))}</strong>
+                      <div class="muted">{_esc(e.get('significance'))}</div>
+                    </div></div>"""
+                )
+            if not ev_html:
+                ev_html.append('<div class="empty">No chronicle events yet.</div>')
+
+            dec_html = []
+            for e in decisions[:10]:
+                dec_html.append(
+                    f"""<div class="list-item">
+                    <div class="idx">✓</div>
+                    <div>
+                      <strong>{_esc(e.get('decision'))}</strong>
+                      <div class="muted">{_esc(e.get('reason'))} · {_esc(e.get('outcome'))}</div>
+                    </div></div>"""
+                )
+
+            les_html = []
+            for e in lessons[:8]:
+                les_html.append(
+                    f"""<div class="list-item">
+                    <div class="idx">★</div>
+                    <div>
+                      <strong>{_esc(e.get('lesson'))}</strong>
+                      <div class="muted">{_esc(e.get('context'))}</div>
+                    </div></div>"""
+                )
+
+            body = f"""
+            <div class="hero">
+              <div class="q">Department · Historian</div>
+              <h2>Why did we become this?</h2>
+              <p class="muted" style="margin:0">Chronicle of structural change and the journal of decisions & lessons.</p>
+            </div>
+            <div class="section-label">Chronicle</div>
+            <div class="card">{''.join(ev_html)}</div>
+            <div class="section-label">Recent decisions</div>
+            <div class="card">{''.join(dec_html) if dec_html else '<div class="empty">None yet.</div>'}</div>
+            <div class="section-label">Lessons</div>
+            <div class="card">{''.join(les_html) if les_html else '<div class="empty">None yet.</div>'}</div>
+            <div class="section-label">Record lesson</div>
+            <div class="card stack">
+              <input type="text" id="lesson" placeholder="Lesson learned"/>
+              <input type="text" id="ctx" placeholder="Context (optional)"/>
+              <div class="form-actions"><button onclick="addLesson()">Save lesson</button></div>
+            </div>
+            <script>
+            async function addLesson(){{
+              const lesson=document.getElementById('lesson').value.trim();
+              const context=document.getElementById('ctx').value.trim();
+              if(!lesson){{alert('Lesson required');return;}}
+              const r=await fetch('/api/journal/lesson',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+                body:JSON.stringify({{lesson,context}})}});
+              const d=await r.json();
+              if(d.error) alert(d.error); else location.reload();
+            }}
+            </script>"""
+            return _shell("Historian", body, active_dept="historian", active_nav="historian")
+
+        def _page_builder(self):
+            depts = registry.list()
+            rows = []
+            for d in depts:
+                st = d.get("status", "active")
+                cls = "good" if st == "active" else "warn"
+                rows.append(
+                    f"""<div class="list-item">
+                    <div class="idx">▦</div>
+                    <div style="flex:1">
+                      <div class="row" style="justify-content:space-between">
+                        <strong>{_esc(d.get('name'))}</strong>
+                        <span class="badge {cls}">{_esc(st)}</span>
+                      </div>
+                      <div class="muted">{_esc(d.get('description'))}</div>
+                    </div></div>"""
+                )
+
+            body = f"""
+            <div class="hero">
+              <div class="q">Department · Builder</div>
+              <h2>How do we create?</h2>
+              <p class="muted" style="margin:0">Register departments and scaffold capabilities. Significant creates go through the Approval Gate.</p>
+            </div>
+            <div class="section-label">Registry ({len(depts)})</div>
+            <div class="card">{''.join(rows) if rows else '<div class="empty">No departments registered.</div>'}</div>
+            <div class="section-label">Propose new department</div>
+            <div class="card stack">
+              <input type="text" id="dname" placeholder="Department name"/>
+              <input type="text" id="ddesc" placeholder="Description — what question does it answer?"/>
+              <div class="form-actions">
+                <button onclick="proposeDept()">Create proposal</button>
+              </div>
+              <p class="muted" style="margin:0">Opens a proposal (create_department). Approve from Chat or pending cards.</p>
+            </div>
+            <div class="section-label">Shortcuts</div>
+            <div class="row">
+              <a class="btn secondary" href="/projects">Projects</a>
+              <a class="btn secondary" href="/tasks">Tasks</a>
+              <a class="btn secondary" href="/">Chat to approve</a>
+            </div>
+            <script>
+            async function proposeDept(){{
+              const name=document.getElementById('dname').value.trim();
+              const description=document.getElementById('ddesc').value.trim();
+              if(!name){{alert('Name required');return;}}
+              const r=await fetch('/api/builder/propose',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+                body:JSON.stringify({{name,description}})}});
+              const d=await r.json();
+              if(d.error) alert(d.error);
+              else {{ alert('Proposal '+d.proposal.id+' created. Approve in Chat.'); location.href='/'; }}
+            }}
+            </script>"""
+            return _shell("Builder", body, active_dept="builder", active_nav="builder")
+
+        def _page_briefing(self):
+            text = briefing.render()
+            body = f"""
+            <h1 class="page-title">Founder Briefing</h1>
+            <p class="page-desc">Snapshot of identity, purpose, alignment, and recent history.</p>
+            <pre class="card">{_esc(text)}</pre>
+            <div class="row">
+              <a class="btn secondary" href="/dept/steward">Steward detail</a>
+              <a class="btn secondary" href="/">Chat</a>
+            </div>"""
+            return _shell("Briefing", body, active_nav="chat")
+
+        def _page_projects(self):
+            plist = projects.get_projects(include_archived=True)
+            rows = "".join(
+                f"<tr><td><span class='badge'>{_esc(p.get('status'))}</span></td>"
+                f"<td>{_esc(p.get('name'))}</td>"
+                f"<td class='muted'>{_esc(p.get('next_action'))}</td></tr>"
+                for p in plist
+            ) or "<tr><td colspan='3' class='muted'>No projects yet.</td></tr>"
+            body = f"""
+            <h1 class="page-title">Projects</h1>
+            <p class="page-desc">Active concerns. Archive and status changes prefer the approval path via Chat.</p>
+            <div class="card" style="overflow-x:auto">
+              <table><thead><tr><th>Status</th><th>Name</th><th>Next action</th></tr></thead>
+              <tbody>{rows}</tbody></table>
+            </div>
+            <div class="card stack">
+              <div class="section-label" style="margin:0">Propose project</div>
+              <input type="text" id="pname" placeholder="Project name"/>
+              <div class="form-actions"><button onclick="proposeProj()">Create proposal</button></div>
+            </div>
+            <script>
+            async function proposeProj(){{
+              const name=document.getElementById('pname').value.trim();
+              if(!name)return;
+              const r=await fetch('/api/chat',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+                body:JSON.stringify({{message:'create project '+name}})}});
+              const d=await r.json();
+              alert(d.message||'ok'); location.href='/';
+            }}
+            </script>"""
+            return _shell("Projects", body, active_dept="projects", active_nav="builder")
+
+        def _page_tasks(self):
+            groups = tasks.grouped_by_project()
+            parts = []
+            for proj, tasklist in groups.items():
+                rows = "".join(
+                    f"<tr><td class='muted'>{_esc(t.get('id'))}</td>"
+                    f"<td><span class='badge'>{_esc(t.get('status'))}</span></td>"
+                    f"<td>{_esc(t.get('title'))}</td></tr>"
+                    for t in tasklist
+                )
+                parts.append(
+                    f"<div class='section-label'>{_esc(proj)}</div>"
+                    f"<div class='card' style='overflow-x:auto'><table>"
+                    f"<thead><tr><th>ID</th><th>Status</th><th>Title</th></tr></thead>"
+                    f"<tbody>{rows}</tbody></table></div>"
+                )
+            body = f"""
+            <h1 class="page-title">Tasks</h1>
+            <p class="page-desc">Grouped by project. Add/complete via Chat for gated approval.</p>
+            {''.join(parts) if parts else '<div class="card empty">No tasks yet.</div>'}
+            <div class="card stack">
+              <input type="text" id="ttitle" placeholder="New task title"/>
+              <input type="text" id="tproj" placeholder="Project (optional)"/>
+              <div class="form-actions"><button onclick="proposeTask()">Propose task</button></div>
+            </div>
+            <script>
+            async function proposeTask(){{
+              let t=document.getElementById('ttitle').value.trim();
+              const p=document.getElementById('tproj').value.trim();
+              if(!t)return;
+              if(p) t = t + ' --project ' + p;
+              const r=await fetch('/api/chat',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+                body:JSON.stringify({{message:'add task '+t}})}});
+              const d=await r.json();
+              alert(d.message||'ok'); location.href='/';
+            }}
+            </script>"""
+            return _shell("Tasks", body, active_dept="tasks", active_nav="builder")
+
         def do_GET(self):
             path = urlparse(self.path).path
             if path == "/api/health":
                 return self._json(200, {"status": "ok", "service": "Cubit OS", "version": "0.1.0", "android": True})
             if path == "/api/briefing":
                 return self._json(200, briefing.build())
-            if path == "/" or path == "/chat":
-                review = steward.review()
-                pending = cl.get_pending()
-                pending_html = ""
-                for p in pending:
-                    pending_html += f"""<div class="card"><div class="muted">{p['id']}</div>
-                    <div>{p.get('description','')}</div>
-                    <div class="row">
-                    <button class="good" onclick="approve('{p['id']}')">Approve</button>
-                    <button class="danger" onclick="reject('{p['id']}')">Reject</button>
-                    </div></div>"""
-                body = f"""
-                <h1>Chat</h1>
-                <p class="muted">Cubit proposes. You decide.</p>
-                <div id="log" class="chat-log card"></div>
-                <div class="row">
-                  <input type="text" id="msg" placeholder="briefing · create project X · approve prop-001"/>
-                  <button onclick="send()">Send</button>
-                </div>
-                <div id="pending">{pending_html}</div>
-                <script>
-                const log=document.getElementById('log');
-                function add(role,t){{const d=document.createElement('div');d.className='msg '+role;d.textContent=(role==='user'?'You: ':'Cubit: ')+t;log.appendChild(d);log.scrollTop=log.scrollHeight;}}
-                async function send(){{const i=document.getElementById('msg');const t=i.value.trim();if(!t)return;add('user',t);i.value='';
-                  const r=await fetch('/api/chat',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{message:t}})}});
-                  const d=await r.json();add('bot',d.message||JSON.stringify(d));if(d.pending&&d.pending.length)location.reload();}}
-                async function approve(id){{const r=await fetch('/api/proposals/'+id+'/approve',{{method:'POST'}});const d=await r.json();add('bot','Approved '+id+': '+(d.execution?d.execution.status:JSON.stringify(d)));setTimeout(()=>location.reload(),600);}}
-                async function reject(id){{const r=await fetch('/api/proposals/'+id+'/reject',{{method:'POST'}});const d=await r.json();add('bot',d.message||JSON.stringify(d));setTimeout(()=>location.reload(),600);}}
-                document.getElementById('msg').addEventListener('keydown',e=>{{if(e.key==='Enter')send();}});
-                </script>"""
-                return self._send(200, _html_page("Chat", body, review))
-            if path == "/briefing":
-                text = briefing.render()
-                body = f"<h1>Founder Briefing</h1><pre class='card'>{_esc(text)}</pre>"
-                return self._send(200, _html_page("Briefing", body))
-            if path == "/projects":
-                rows = "".join(
-                    f"<tr><td><span class='badge'>{_esc(p.get('status',''))}</span></td>"
-                    f"<td>{_esc(p.get('name',''))}</td><td class='muted'>{_esc(p.get('next_action',''))}</td></tr>"
-                    for p in projects.get_projects(include_archived=True)
-                ) or "<tr><td colspan='3' class='muted'>No projects yet.</td></tr>"
-                body = f"<h1>Projects</h1><table><thead><tr><th>Status</th><th>Name</th><th>Next</th></tr></thead><tbody>{rows}</tbody></table>"
-                return self._send(200, _html_page("Projects", body))
-            if path == "/tasks":
-                groups = tasks.grouped_by_project()
-                parts = []
-                for proj, tasklist in groups.items():
-                    rows = "".join(
-                        f"<tr><td class='muted'>{_esc(t.get('id',''))}</td>"
-                        f"<td><span class='badge'>{_esc(t.get('status',''))}</span></td>"
-                        f"<td>{_esc(t.get('title',''))}</td></tr>"
-                        for t in tasklist
-                    )
-                    parts.append(f"<h2>{_esc(proj)}</h2><table><thead><tr><th>ID</th><th>Status</th><th>Title</th></tr></thead><tbody>{rows}</tbody></table>")
-                body = "<h1>Tasks</h1>" + ("".join(parts) if parts else "<p class='muted'>No tasks yet.</p>")
-                return self._send(200, _html_page("Tasks", body))
-            if path == "/journal":
-                entries = list(reversed(journal.recent(30)))
-                cards = []
-                for e in entries:
-                    if e.get("type") == "decision":
-                        cards.append(
-                            f"<div class='card'><span class='badge'>decision</span> "
-                            f"<span class='muted'>{_esc(str(e.get('created',''))[:19])}</span>"
-                            f"<p><strong>{_esc(e.get('decision',''))}</strong></p>"
-                            f"<p class='muted'>{_esc(e.get('reason',''))} — { _esc(e.get('outcome',''))}</p></div>"
-                        )
-                    else:
-                        cards.append(
-                            f"<div class='card'><span class='badge'>lesson</span> "
-                            f"<p><strong>{_esc(e.get('lesson',''))}</strong></p>"
-                            f"<p class='muted'>{_esc(e.get('context',''))}</p></div>"
-                        )
-                body = "<h1>Journal</h1>" + ("".join(cards) if cards else "<p class='muted'>No entries yet.</p>")
-                return self._send(200, _html_page("Journal", body))
-            if path == "/chronicle":
-                events = list(reversed(historian.get_events()))
-                cards = "".join(
-                    f"<div class='card'><span class='muted'>{_esc(str(e.get('date',''))[:19])}</span>"
-                    f"<p><strong>{_esc(e.get('event',''))}</strong></p>"
-                    f"<p class='muted'>{_esc(e.get('significance',''))}</p></div>"
-                    for e in events
-                ) or "<p class='muted'>No events yet.</p>"
-                body = f"<h1>Chronicle</h1>{cards}"
-                return self._send(200, _html_page("Chronicle", body))
-            return self._send(404, _html_page("404", "<h1>Not found</h1>"))
+            if path == "/api/steward":
+                return self._json(200, steward.review())
+            routes = {
+                "/": self._page_chat,
+                "/chat": self._page_chat,
+                "/briefing": self._page_briefing,
+                "/projects": self._page_projects,
+                "/tasks": self._page_tasks,
+                "/dept/steward": self._page_steward,
+                "/dept/advisor": self._page_advisor,
+                "/dept/historian": self._page_historian,
+                "/dept/builder": self._page_builder,
+                "/journal": self._page_historian,
+                "/chronicle": self._page_historian,
+            }
+            fn = routes.get(path)
+            if fn:
+                return self._send(200, fn())
+            return self._send(404, _shell("404", "<h1 class='page-title'>Not found</h1><a href='/'>Home</a>"))
 
         def do_POST(self):
             path = urlparse(self.path).path
+            body = self._read_json()
             if path == "/api/chat":
-                body = self._read_json()
                 text = body.get("message") or body.get("text") or ""
                 return self._json(200, cl.handle(text))
             if path.startswith("/api/proposals/") and path.endswith("/approve"):
-                prop_id = path.split("/")[3]
-                return self._json(200, cl.approve(prop_id))
+                return self._json(200, cl.approve(path.split("/")[3]))
             if path.startswith("/api/proposals/") and path.endswith("/reject"):
-                prop_id = path.split("/")[3]
-                return self._json(200, cl.reject(prop_id))
+                return self._json(200, cl.reject(path.split("/")[3]))
+            if path == "/api/advisor/add":
+                # Direct advisor store for mobile UX; still journals via optional gate later
+                rec = advisor.add(
+                    observation=body.get("observation") or "",
+                    evidence=body.get("evidence") or "",
+                    recommendation=body.get("recommendation") or "",
+                )
+                return self._json(200, {"recommendation": rec})
+            if path == "/api/advisor/close":
+                out = advisor.close(body.get("id") or "")
+                if not out:
+                    return self._json(404, {"error": "not found"})
+                return self._json(200, {"recommendation": out})
+            if path == "/api/journal/lesson":
+                entry = journal.record_lesson(
+                    lesson=body.get("lesson") or "",
+                    context=body.get("context") or "",
+                )
+                return self._json(200, {"entry": entry})
+            if path == "/api/builder/propose":
+                name = (body.get("name") or "").strip()
+                if not name:
+                    return self._json(400, {"error": "name required"})
+                prop = cl.create_proposal(
+                    action="create_department",
+                    description=f"Create department '{name}'",
+                    params={
+                        "name": name,
+                        "description": body.get("description") or "",
+                        "status": "active",
+                        "scaffold": True,
+                    },
+                    risk_notes="Adds organizational surface area. Prefer foundation before expansion.",
+                )
+                return self._json(200, {"proposal": prop})
             return self._json(404, {"error": "not found"})
 
     return Handler
-
-
-def _esc(s: str) -> str:
-    return (
-        str(s)
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
 
 
 def start_server(port: int = 8765, data_root: str | None = None) -> str:
@@ -254,10 +783,10 @@ def start_server(port: int = 8765, data_root: str | None = None) -> str:
         os.environ["CUBIT_DATA_ROOT"] = str(fallback)
 
     _port = int(port)
-    handler = _make_handler()
+    handler_cls = _make_handler()
 
     def run() -> None:
-        httpd = ThreadingHTTPServer(("127.0.0.1", _port), handler)
+        httpd = ThreadingHTTPServer(("127.0.0.1", _port), handler_cls)
         httpd.serve_forever()
 
     _server_thread = threading.Thread(target=run, name="cubit-http", daemon=True)
