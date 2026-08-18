@@ -101,10 +101,16 @@
       <button id="btnMapPop">Population</button>
       <button id="btnSave">Save</button>
       <button id="btnLoad">Load</button>
-      <button id="btnGod" class="god">Yahweh Bless All</button>
-      <button id="btnBlessOne" class="god">Bless Selected</button>
-      <button id="btnSerpent" class="serpent">Serpent Corrupt All</button>
-      <button id="btnCurseOne" class="serpent">Curse Selected</button>
+      <select id="nationTarget" title="Target nation for bless/curse" style="background:#18181b;color:#e4e4e7;border:1px solid #3f3f46;border-radius:8px;padding:6px 8px;font-size:12px">
+        <option value="">Nation: All</option>
+      </select>
+      <button id="btnGod" class="god">Bless All</button>
+      <button id="btnBlessNation" class="god">Bless Nation</button>
+      <button id="btnBlessOne" class="god">Bless One</button>
+      <button id="btnSerpent" class="serpent">Corrupt All</button>
+      <button id="btnCurseNation" class="serpent">Curse Nation</button>
+      <button id="btnCurseOne" class="serpent">Curse One</button>
+      <button id="btnNewTribe" title="Create a new tribe">+ Tribe</button>
     </div>
   </header>
 
@@ -1056,6 +1062,7 @@ function render() {
   dip += '</table>';
   document.getElementById('diplomacy').innerHTML = dip;
 
+  refreshNationSelect();
   renderInspector();
 }
 
@@ -1101,6 +1108,65 @@ function renderInspector() {
     <div class="insp-row"><span>Aggression</span><span>${m.aggression.toFixed(0)}</span></div>
     <div class="insp-row"><span>Goods</span><span style="font-size:10px">${goodsStr}</span></div>
   `;
+}
+
+function refreshNationSelect() {
+  const sel = document.getElementById('nationTarget');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Nation: All</option>' + TRIBES.map(t =>
+    `<option value="${t.id}" ${cur===t.id?'selected':''}>${t.name}</option>`
+  ).join('');
+}
+
+function createNewTribe() {
+  const name = prompt('New tribe name (e.g. Moab)');
+  if (!name || !name.trim()) return;
+  let id = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  if (!id) id = 'tribe_' + state.nextId;
+  if (TRIBES.some(t => t.id === id)) { log('Tribe id exists: ' + id); return; }
+  // pick free-ish map position
+  const x = 0.15 + Math.random() * 0.7;
+  const y = 0.15 + Math.random() * 0.7;
+  const color = '#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0');
+  const tribe = { id, name: name.trim(), color, x, y };
+  TRIBES.push(tribe);
+  // seed small population
+  for (let i = 0; i < 4; i++) {
+    state.metabolites.push(createMetabolite({
+      tribe, spread: 24, age: rand(8, 22), money: rand(10, 30), belief: rand(45, 80)
+    }));
+  }
+  // diplomacy defaults vs others
+  if (!state.diplomacy[id]) state.diplomacy[id] = {};
+  for (const o of TRIBES) {
+    if (o.id === id) continue;
+    if (!state.diplomacy[o.id]) state.diplomacy[o.id] = {};
+    setRelation(id, o.id, 0);
+  }
+  rebuildNationGrid();
+  refreshNationSelect();
+  log('New tribe founded: ' + tribe.name + ' (' + id + ')');
+}
+
+function grantToNation(nationId, kind) {
+  if (!nationId) { log('Pick a nation from the dropdown'); return; }
+  const members = state.metabolites.filter(m => m.alive && m.tribe === nationId);
+  if (!members.length) { log('No living members in ' + nationId); return; }
+  if (kind === 'bless') {
+    if (state.yahweh < 35) return;
+    state.yahweh -= 35;
+    const key = pickBlessing();
+    members.forEach(m => grantBlessing(m, key));
+    log(`Blessed nation ${nationId} with ${BLESSINGS[key].label} (${members.length} agents)`);
+  } else {
+    if (state.serpent < 35) return;
+    state.serpent -= 35;
+    const key = pickCurse();
+    members.forEach(m => grantCurse(m, key));
+    log(`Cursed nation ${nationId} with ${CURSES[key].label} (${members.length} agents)`);
+  }
+  renderInspector();
 }
 
 function renderLog() {
@@ -1183,6 +1249,13 @@ document.getElementById('btnGod').onclick = () => {
   for (const a of TRIBES) for (const b of TRIBES) if (a.id < b.id) adjustRelation(a.id, b.id, 2);
   log(`Yahweh Bless All — special: ${BLESSINGS[key].label}`);
 };
+document.getElementById('btnBlessNation').onclick = () => {
+  grantToNation(document.getElementById('nationTarget').value, 'bless');
+};
+document.getElementById('btnCurseNation').onclick = () => {
+  grantToNation(document.getElementById('nationTarget').value, 'curse');
+};
+document.getElementById('btnNewTribe').onclick = () => createNewTribe();
 document.getElementById('btnBlessOne').onclick = () => {
   const m = state.metabolites.find(x => x.id === state.selectedId && x.alive);
   if (!m) { log('Select a Cubitz first (click on map)'); return; }
@@ -1257,6 +1330,7 @@ function boot() {
     }
   }
   log('SYSTEM BOOT — Cubitz nations online');
+  refreshNationSelect();
   log(`Year tick = ${YEAR_MS / 1000}s · tribes separated for ${state.separationYears} years`);
   log(`${state.metabolites.length} agents seeded in homeland clusters`);
   requestAnimationFrame(frame);

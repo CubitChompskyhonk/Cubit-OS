@@ -197,6 +197,24 @@ pre { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 0.
 }
 .dept-chip.active { background: #1a2740; border-color: var(--accent); color: var(--accent); }
 
+/* Splash */
+.splash {
+  position: fixed; inset: 0; z-index: 9999; background: #0b0d12;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transition: opacity 0.6s ease;
+}
+.splash.hide { opacity: 0; pointer-events: none; }
+.splash .cube-big {
+  width: 64px; height: 64px; border-radius: 14px;
+  background: linear-gradient(135deg, #f5c542, #d4a017);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900; color: #0b0d12; font-size: 1.6rem;
+  box-shadow: 0 0 40px rgba(245,197,66,0.25);
+  margin-bottom: 1rem;
+}
+.splash h1 { font-size: 1.25rem; margin: 0; }
+.splash p { color: var(--muted); font-size: 0.85rem; margin-top: 0.35rem; }
+
 /* Chat */
 .chat-log {
   min-height: 220px; max-height: 42vh; overflow-y: auto;
@@ -236,6 +254,35 @@ pre { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 0.
 """
 
 
+
+def _splash() -> str:
+    return """
+<div class="splash" id="cubit-splash">
+  <div class="cube-big">C</div>
+  <h1>Cubit OS</h1>
+  <p>Foundation before expansion</p>
+  <audio id="boot-audio" src="/static/VOX_BIBLICAL_888.wav" preload="auto"></audio>
+</div>
+<script>
+(function(){
+  const s = document.getElementById('cubit-splash');
+  const a = document.getElementById('boot-audio');
+  function go(){ if(s){ s.classList.add('hide'); setTimeout(function(){ if(s&&s.parentNode)s.remove(); },700);} }
+  if (sessionStorage.getItem('cubit_booted')) { go(); return; }
+  sessionStorage.setItem('cubit_booted','1');
+  try {
+    if (a) {
+      a.volume = 0.85;
+      var p = a.play();
+      if (p && p.then) p.then(function(){ setTimeout(go, Math.min(16000, ((a.duration||4)*1000))); }).catch(function(){ setTimeout(go, 1800); });
+      else setTimeout(go, 1800);
+    } else setTimeout(go, 1200);
+  } catch(e) { setTimeout(go, 1200); }
+})();
+</script>
+"""
+
+
 def _toolbar(active: str = "") -> str:
     return f"""
 <header class="toolbar">
@@ -248,7 +295,9 @@ def _toolbar(active: str = "") -> str:
   </div>
   <div class="toolbar-actions">
     <a class="icon-btn" href="/briefing" title="Briefing">📋</a>
+    <a class="icon-btn" href="/journal" title="Founder Log">📜</a>
     <a class="icon-btn" href="/" title="Chat">💬</a>
+    <a class="icon-btn" href="/dept/advocate" title="Advocate">⚑</a>
   </div>
 </header>
 <div class="dept-bar">
@@ -290,6 +339,7 @@ def _shell(title: str, body: str, active_dept: str = "", active_nav: str = "chat
 <style>{CSS}</style>
 </head>
 <body>
+{_splash()}
 {_toolbar(active_dept)}
 <div class="page">
 {body}
@@ -748,6 +798,47 @@ def _make_handler():
             return _shell("Commerce", body, active_dept="commerce", active_nav="chat")
 
 
+
+        def _page_advocate(self):
+            body = """
+            <div class="hero">
+              <div class="q">Department · Advocate</div>
+              <h2>Personal offline agent</h2>
+              <p class="muted" style="margin:0">Queue calls, email drafts, appointments, sales, PR.</p>
+            </div>
+            <div class="card stack">
+              <select id="atype">
+                <option value="email">email</option>
+                <option value="phonecall">phonecall</option>
+                <option value="appointment">appointment</option>
+                <option value="sales">sales</option>
+                <option value="pr">pr</option>
+                <option value="research">research</option>
+                <option value="followup">followup</option>
+              </select>
+              <input id="atitle" placeholder="Title"/>
+              <input id="acontact" placeholder="Contact"/>
+              <input id="adetails" placeholder="Details"/>
+              <div class="form-actions">
+                <button onclick="advAdd()">Enqueue</button>
+                <button class="secondary" onclick="advProc()">Process offline</button>
+              </div>
+            </div>
+            <div class="card"><pre id="advout" class="muted" style="white-space:pre-wrap;font-size:0.8rem">—</pre></div>
+            <script>
+            async function advAdd(){
+              const r=await fetch('/api/advocate/enqueue',{method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({type:document.getElementById('atype').value,title:document.getElementById('atitle').value,contact:document.getElementById('acontact').value,details:document.getElementById('adetails').value})});
+              const d=await r.json(); document.getElementById('advout').textContent=JSON.stringify(d,null,2);
+            }
+            async function advProc(){
+              const r=await fetch('/api/advocate/process',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+              const d=await r.json(); document.getElementById('advout').textContent=JSON.stringify(d,null,2);
+            }
+            </script>
+            """
+            return _shell("Advocate", body, active_dept="advocate", active_nav="chat")
+
         def _page_cubitz_dept(self):
             body = """
             <div class="hero">
@@ -770,6 +861,21 @@ def _make_handler():
 
         def do_GET(self):
             path = urlparse(self.path).path
+            if path.startswith("/static/"):
+                name = path.split("/static/", 1)[-1].split("/")[-1]
+                candidates = [
+                    Path(__file__).resolve().parent / "cubit_static" / name,
+                    Path(__file__).resolve().parent / "cubit" / "web" / "static" / name,
+                ]
+                for c in candidates:
+                    if c.exists() and c.is_file():
+                        data = c.read_bytes()
+                        ctype = "application/octet-stream"
+                        if name.endswith(".wav"): ctype = "audio/wav"
+                        elif name.endswith(".css"): ctype = "text/css"
+                        elif name.endswith(".html"): ctype = "text/html"
+                        return self._send(200, data, content_type=ctype)
+                return self._send(404, "missing", content_type="text/plain")
             if path == "/cubitz":
                 return self._send(200, _load_cubitz_html())
             if path == "/api/health":
@@ -790,6 +896,7 @@ def _make_handler():
                 "/dept/builder": self._page_builder,
                 "/dept/commerce": self._page_commerce,
                 "/dept/cubitz": self._page_cubitz_dept,
+                "/dept/advocate": self._page_advocate,
                 "/journal": self._page_historian,
                 "/chronicle": self._page_historian,
             }

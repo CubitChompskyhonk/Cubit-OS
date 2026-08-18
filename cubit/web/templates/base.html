@@ -6,8 +6,66 @@
   <title>{% block title %}Cubit OS{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css" />
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <style>
+    .top-actions { display:flex; gap:0.4rem; margin-left:auto; align-items:center; flex-wrap:wrap; }
+    .top-actions a {
+      display:inline-flex; align-items:center; gap:0.3rem;
+      padding:0.35rem 0.65rem; border-radius:8px; border:1px solid var(--border,#27272a);
+      background:#18181b; color:var(--text,#e4e4e7); text-decoration:none; font-size:0.85rem; font-weight:600;
+    }
+    .top-actions a:hover { border-color:#f59e0b; color:#fcd34d; }
+    .layout-header {
+      display:flex; align-items:center; gap:1rem; padding:0.65rem 1rem;
+      border-bottom:1px solid var(--border,#27272a); background:rgba(10,10,15,0.95);
+      position:sticky; top:0; z-index:40;
+    }
+    .splash {
+      position:fixed; inset:0; z-index:9999; background:#0b0d12;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      transition:opacity 0.6s ease;
+    }
+    .splash.hide { opacity:0; pointer-events:none; }
+    .splash .cube-big {
+      width:72px; height:72px; border-radius:16px;
+      background:linear-gradient(135deg,#f5c542,#d4a017);
+      display:flex; align-items:center; justify-content:center;
+      font-weight:900; color:#0b0d12; font-size:1.8rem;
+      box-shadow:0 0 48px rgba(245,197,66,0.3); margin-bottom:1rem;
+    }
+  </style>
 </head>
 <body>
+  <div class="splash" id="cubit-splash">
+    <div class="cube-big">C</div>
+    <h1 style="margin:0">Cubit OS</h1>
+    <p style="color:#71717a;margin-top:0.4rem">Foundation before expansion</p>
+    <audio id="boot-audio" src="/static/VOX_BIBLICAL_888.wav" preload="auto"></audio>
+  </div>
+  <script>
+  (function(){
+    const s = document.getElementById('cubit-splash');
+    const a = document.getElementById('boot-audio');
+    function go(){ if(s){ s.classList.add('hide'); setTimeout(function(){ if(s&&s.parentNode)s.remove(); },700);} }
+    if (sessionStorage.getItem('cubit_booted')) { go(); return; }
+    sessionStorage.setItem('cubit_booted','1');
+    try {
+      if (a) {
+        a.volume = 0.85;
+        var p = a.play();
+        if (p && p.then) p.then(function(){ setTimeout(go, Math.min(16000, ((a.duration||4)*1000))); }).catch(function(){ setTimeout(go, 1800); });
+        else setTimeout(go, 1800);
+      } else setTimeout(go, 1200);
+    } catch(e) { setTimeout(go, 1200); }
+  })();
+  </script>
+  <div class="layout-header">
+    <strong>Cubit OS</strong>
+    <div class="top-actions">
+      <a href="/journal" title="Founder Log">📜 Founder Log</a>
+      <a href="/" title="Chat">💬 Chat</a>
+      <a href="/advocate" title="Advocate">⚑ Advocate</a>
+    </div>
+  </div>
   <div class="layout">
     <aside class="side">
       <h2>Cubit</h2>
