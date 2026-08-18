@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cubitz — World Simulation</title>
+  <title>Cubitz — Nations & Years</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -43,7 +43,7 @@
     #world { flex: 1; background: #09090b; position: relative; min-width: 0; }
     canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
     aside {
-      width: min(360px, 42vw); background: #0f0f14; border-left: 1px solid #27272a;
+      width: min(380px, 44vw); background: #0f0f14; border-left: 1px solid #27272a;
       overflow-y: auto; padding: 12px; font-size: 12px;
     }
     @media (max-width: 720px) {
@@ -61,8 +61,8 @@
     .stat-row { display: flex; justify-content: space-between; margin: 3px 0; gap: 8px; }
     .stat-label { color: #a1a1aa; }
     .stat-value { font-family: monospace; font-weight: 600; }
-    .tribe { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
-    .log { max-height: 140px; overflow-y: auto; font-size: 11px; font-family: monospace; color: #a1a1aa; line-height: 1.35; }
+    .tribe { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+    .log { max-height: 130px; overflow-y: auto; font-size: 11px; font-family: monospace; color: #a1a1aa; line-height: 1.35; }
     .log div { margin-bottom: 2px; }
     footer {
       border-top: 1px solid #27272a; padding: 6px 16px;
@@ -76,7 +76,10 @@
     .tag.war { background: #3f1d1d; color: #fca5a5; }
     .tag.trade { background: #1a2e1a; color: #86efac; }
     .tag.dense { background: #3a2a12; color: #fcd34d; }
+    .tag.ally { background: #1e293b; color: #93c5fd; }
+    .tag.mixed { background: #312e81; color: #c4b5fd; }
     .hint { color: #71717a; font-size: 11px; margin-top: 6px; }
+    .dip-cell { font-size: 10px; font-family: monospace; }
   </style>
 </head>
 <body>
@@ -84,8 +87,8 @@
     <div class="logo">
       <div class="logo-box">CZ</div>
       <div>
-        <h1>Cubitz — World Simulation</h1>
-        <span class="badge">map · inspect · trade · density · war</span>
+        <h1>Cubitz — Nations & Years</h1>
+        <span class="badge">nations · population flow · diplomacy · years</span>
       </div>
     </div>
     <div class="controls">
@@ -93,6 +96,9 @@
       <button id="btnSpeed1" class="active">1×</button>
       <button id="btnSpeed2">2×</button>
       <button id="btnSpeed5">5×</button>
+      <button id="btnMapBoth" class="active">Both maps</button>
+      <button id="btnMapNations">Nations</button>
+      <button id="btnMapPop">Population</button>
       <button id="btnSave">Save</button>
       <button id="btnLoad">Load</button>
       <button id="btnGod" class="god">Yahweh Bless</button>
@@ -105,41 +111,39 @@
     <aside>
       <div class="panel">
         <h3>World State</h3>
-        <div class="stat-row"><span class="stat-label">Day</span><span class="stat-value" id="day">0</span></div>
+        <div class="stat-row"><span class="stat-label">Year</span><span class="stat-value" id="year">0</span></div>
         <div class="stat-row"><span class="stat-label">Population</span><span class="stat-value" id="pop">0</span></div>
+        <div class="stat-row"><span class="stat-label">Mixed blood</span><span class="stat-value" id="mixed">0</span></div>
         <div class="stat-row"><span class="stat-label">Treasury</span><span class="stat-value" id="treasury">$0</span></div>
         <div class="stat-row"><span class="stat-label">Firmament</span><span class="stat-value" id="firmament">100%</span></div>
         <div class="stat-row"><span class="stat-label">Corruption</span><span class="stat-value" id="corruption">0%</span></div>
-        <div class="stat-row"><span class="stat-label">Avg Fruitfulness</span><span class="stat-value" id="fruit">0</span></div>
         <div class="stat-row"><span class="stat-label">Global Stress</span><span class="stat-value" id="stress">0</span></div>
         <div class="stat-row"><span class="stat-label">Active Wars</span><span class="stat-value" id="wars">0</span></div>
+        <div class="stat-row"><span class="stat-label">Alliances</span><span class="stat-value" id="alliances">0</span></div>
       </div>
 
       <div class="panel" id="inspectorPanel">
         <h3>Character Inspector</h3>
-        <div id="inspector">
-          <p class="hint">Click an agent on the map to inspect.</p>
-        </div>
+        <div id="inspector"><p class="hint">Click an agent on the map to inspect.</p></div>
       </div>
 
       <div class="panel">
-        <h3>Map Regions</h3>
-        <div id="regions"></div>
+        <h3>Diplomacy</h3>
+        <div id="diplomacy" class="dip-cell"></div>
       </div>
 
       <div class="panel">
-        <h3>Tribes</h3>
+        <h3>Nations</h3>
         <div id="tribes"></div>
       </div>
 
       <div class="panel">
         <h3>Trade Economy</h3>
-        <div class="stat-row"><span class="stat-label">Trades / day</span><span class="stat-value" id="trades">0</span></div>
+        <div class="stat-row"><span class="stat-label">Trades / year</span><span class="stat-value" id="trades">0</span></div>
         <div class="stat-row"><span class="stat-label">Market volume</span><span class="stat-value" id="volume">$0</span></div>
         <div class="stat-row"><span class="stat-label">Goods in world</span><span class="stat-value" id="goods">0</span></div>
-        <div class="stat-row"><span class="stat-label">Tasks / day</span><span class="stat-value" id="tasks">0</span></div>
+        <div class="stat-row"><span class="stat-label">Tasks / year</span><span class="stat-value" id="tasks">0</span></div>
         <div class="stat-row"><span class="stat-label">Offerings</span><span class="stat-value" id="offerings">$0</span></div>
-        <div class="stat-row"><span class="stat-label">Crypto Supply</span><span class="stat-value" id="crypto">0</span></div>
       </div>
 
       <div class="panel">
@@ -156,23 +160,23 @@
   </main>
 
   <footer>
-    <span>Cubitz · map · inspector · trade · density · war</span>
+    <span>Cubitz · nation map over · population flow under · year ticks · diplomacy</span>
     <span id="fps">—</span>
   </footer>
 
 <script>
 // ============================================================
-// CUBITZ — World Simulation (map, inspector, trade, density, war)
+// CUBITZ — Nations (over) · Population flow (under) · Years · Diplomacy
 // ============================================================
 
 const TRIBES = [
-  { id: 'canaan',  name: 'Canaan',  color: '#fbbf24', x: 0.18, y: 0.32 },
-  { id: 'zion',    name: 'Zion',    color: '#a78bfa', x: 0.38, y: 0.22 },
-  { id: 'babel',   name: 'Babel',   color: '#38bdf8', x: 0.58, y: 0.38 },
-  { id: 'galilee', name: 'Galilee', color: '#2dd4bf', x: 0.78, y: 0.26 },
-  { id: 'gehenna', name: 'Gehenna', color: '#f87171', x: 0.28, y: 0.68 },
-  { id: 'eden',    name: 'Eden',    color: '#4ade80', x: 0.52, y: 0.72 },
-  { id: 'sinai',   name: 'Sinai',   color: '#facc15', x: 0.74, y: 0.62 }
+  { id: 'canaan',  name: 'Canaan',  color: '#fbbf24', x: 0.16, y: 0.28 },
+  { id: 'zion',    name: 'Zion',    color: '#a78bfa', x: 0.38, y: 0.20 },
+  { id: 'babel',   name: 'Babel',   color: '#38bdf8', x: 0.60, y: 0.34 },
+  { id: 'galilee', name: 'Galilee', color: '#2dd4bf', x: 0.80, y: 0.24 },
+  { id: 'gehenna', name: 'Gehenna', color: '#f87171', x: 0.22, y: 0.70 },
+  { id: 'eden',    name: 'Eden',    color: '#4ade80', x: 0.50, y: 0.74 },
+  { id: 'sinai',   name: 'Sinai',   color: '#facc15', x: 0.76, y: 0.66 }
 ];
 
 const REGIONS = [
@@ -185,31 +189,74 @@ const REGIONS = [
 ];
 
 const GOODS = ['grain', 'ore', 'cloth', 'spice'];
+const YEAR_MS = 2000; // 2s = 1 year at 1×
+const MAP_NATIONS = 1, MAP_POP = 2, MAP_BOTH = 3;
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 let W = 800, H = 500;
 let frames = 0, fpsT = performance.now(), fpsVal = 0;
 
+// population trail buffer (under map)
+const trailCanvas = document.createElement('canvas');
+const trailCtx = trailCanvas.getContext('2d');
+
 function resize() {
   const rect = document.getElementById('world').getBoundingClientRect();
   W = Math.max(320, rect.width);
   H = Math.max(240, rect.height);
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = W; canvas.height = H;
+  trailCanvas.width = W; trailCanvas.height = H;
 }
 window.addEventListener('resize', resize);
 resize();
 
+function hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16)
+  };
+}
+function rgbToHex(r, g, b) {
+  const c = (n) => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, '0');
+  return '#' + c(r) + c(g) + c(b);
+}
+function blendColors(c1, c2, t = 0.5) {
+  const a = hexToRgb(c1), b = hexToRgb(c2);
+  return rgbToHex(
+    a.r + (b.r - a.r) * t,
+    a.g + (b.g - a.g) * t,
+    a.b + (b.b - a.b) * t
+  );
+}
+
+function initDiplomacy() {
+  const d = {};
+  for (const a of TRIBES) {
+    d[a.id] = {};
+    for (const b of TRIBES) {
+      if (a.id === b.id) d[a.id][b.id] = 100;
+      else d[a.id][b.id] = rand(-10, 15); // cool but not hostile at start
+    }
+  }
+  return d;
+}
+
 const state = {
-  day: 0, speed: 1, paused: false,
+  year: 0, speed: 1, paused: false,
+  mapMode: MAP_BOTH,
   treasury: 2500, firmament: 100, corruption: 0, cryptoSupply: 0,
   yahweh: 10_000_000, serpent: 10_000_000,
   metabolites: [], log: [], nextId: 1,
   selectedId: null,
-  wars: [], // {a,b,intensity,started}
+  wars: [],
+  diplomacy: initDiplomacy(),
   lastTrades: 0, lastVolume: 0, lastTasks: 0, lastOfferings: 0,
-  globalStress: 0
+  globalStress: 0,
+  // early-game separation: years before free roaming expands
+  separationYears: 25
 };
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
@@ -218,8 +265,24 @@ function choice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 function tribeById(id) { return TRIBES.find(t => t.id === id); }
 
+function relation(t1, t2) {
+  if (t1 === t2) return 100;
+  return (state.diplomacy[t1] && state.diplomacy[t1][t2]) ?? 0;
+}
+function setRelation(t1, t2, v) {
+  if (t1 === t2) return;
+  v = clamp(v, -100, 100);
+  state.diplomacy[t1][t2] = v;
+  state.diplomacy[t2][t1] = v;
+}
+function adjustRelation(t1, t2, delta) {
+  setRelation(t1, t2, relation(t1, t2) + delta);
+}
+function areAllied(t1, t2) { return relation(t1, t2) >= 55; }
+function canIntermarry(t1, t2) { return t1 === t2 || relation(t1, t2) >= 45; }
+
 function log(msg) {
-  state.log.unshift(`[Day ${state.day}] ${msg}`);
+  state.log.unshift(`[Y${state.year}] ${msg}`);
   if (state.log.length > 50) state.log.pop();
   renderLog();
 }
@@ -241,22 +304,52 @@ function localDensity(m, radius) {
   return n;
 }
 
+function nearestTribeId(x, y) {
+  let best = TRIBES[0], bestD = Infinity;
+  for (const t of TRIBES) {
+    const d = Math.hypot(t.x * W - x, t.y * H - y);
+    if (d < bestD) { bestD = d; best = t; }
+  }
+  return best.id;
+}
+
+// Nation territory: nearest homeland among tribes (Voronoi-ish grid sample)
+let nationGrid = null;
+function rebuildNationGrid() {
+  const step = 8;
+  nationGrid = [];
+  for (let y = 0; y < H; y += step) {
+    for (let x = 0; x < W; x += step) {
+      nationGrid.push({ x, y, tid: nearestTribeId(x + step / 2, y + step / 2), s: step });
+    }
+  }
+}
+
 function createMetabolite(opts = {}) {
   const tribe = opts.tribe || choice(TRIBES);
-  const gx = opts.x ?? tribe.x * W + rand(-50, 50);
-  const gy = opts.y ?? tribe.y * H + rand(-50, 50);
+  const sep = state.year < state.separationYears;
+  // Early: tight spawn in homeland; later: wider
+  const spread = opts.spread ?? (sep ? 28 : 55);
+  const gx = opts.x ?? tribe.x * W + rand(-spread, spread);
+  const gy = opts.y ?? tribe.y * H + rand(-spread, spread);
   const goods = {};
   GOODS.forEach(g => { goods[g] = Math.floor(rand(0, 4)); });
+  const parentColors = opts.parentColors || [tribe.color, tribe.color];
+  const color = opts.color || blendColors(parentColors[0], parentColors[1], opts.mix ?? 0.5);
+  const mixed = !!(opts.mixed || (opts.parentTribes && opts.parentTribes[0] !== opts.parentTribes[1]));
   const base = {
     id: state.nextId++,
     name: opts.name || `M${state.nextId}`,
     tribe: tribe.id,
-    x: clamp(gx, 20, W - 20),
-    y: clamp(gy, 20, H - 20),
-    vx: rand(-1.2, 1.2), vy: rand(-1.2, 1.2),
+    parentTribes: opts.parentTribes || [tribe.id, tribe.id],
+    color,
+    mixed,
+    x: clamp(gx, 16, W - 16),
+    y: clamp(gy, 16, H - 16),
+    vx: rand(-0.8, 0.8), vy: rand(-0.8, 0.8),
     mass: rand(0.75, 1.4),
     age: opts.age ?? 0,
-    lifespan: 120,
+    lifespan: 90,
     stage: 'Birth',
     money: opts.money ?? rand(10, 30),
     belief: opts.belief ?? rand(40, 80),
@@ -272,31 +365,31 @@ function createMetabolite(opts = {}) {
     tradeCooldown: 0,
     alive: true,
     parentIds: opts.parentIds || [],
-    lastTrade: null
+    lastTrade: null,
+    trail: [] // recent positions for flow viz
   };
   recalcLifespan(base);
   return base;
 }
 
 function recalcLifespan(m) {
-  let life = 100 + (m.id % 40);
-  if (m.faith > 70) life += 20;
-  if (m.love > 70) life += 12;
-  if (m.fear > 85) life -= 8;
-  if (m.knowledge > 60) life += 12;
-  if (m.curiosity > 75) life += 8;
-  if (state.firmament < 40) life -= 8;
-  if (state.firmament < 20) life -= 12;
-  if (state.corruption > 70) life -= 8;
-  if (m.stress > 70) life -= 10;
-  m.lifespan = clamp(life, 70, 220);
+  // Ages in years
+  let life = 70 + (m.id % 30);
+  if (m.faith > 70) life += 15;
+  if (m.love > 70) life += 10;
+  if (m.fear > 85) life -= 6;
+  if (m.knowledge > 60) life += 10;
+  if (m.stress > 70) life -= 8;
+  if (state.firmament < 40) life -= 6;
+  if (state.corruption > 70) life -= 6;
+  m.lifespan = clamp(life, 50, 120);
 }
 
 function updateStage(m) {
-  if (m.age < 4) m.stage = 'Birth';
+  if (m.age < 3) m.stage = 'Birth';
   else if (m.age < 12) m.stage = 'Youth';
-  else if (m.age < 55) m.stage = 'Adult';
-  else if (m.age < 90) m.stage = 'Middle';
+  else if (m.age < 45) m.stage = 'Adult';
+  else if (m.age < 70) m.stage = 'Middle';
   else m.stage = 'Elder';
 }
 
@@ -308,16 +401,10 @@ function calcFruitfulness(m) {
 }
 
 function calcAwareness(m) {
-  if (m.age > 50) m.awareness += 0.5 * state.speed;
+  if (m.age > 40) m.awareness += 0.4 * state.speed;
   if (m.knowledge > 60) m.awareness += 0.2 * state.speed;
   m.awareness = clamp(m.awareness, 0, 100);
-  m.fearMortality = 20;
-  if (m.faith > 80) m.fearMortality -= 30;
-  if (m.faith < 30) m.fearMortality += 20;
-  if (m.love > 80) m.fearMortality -= 15;
-  if (m.age > 70) m.fearMortality += 0.5;
-  if (m.awareness > 90 && m.faith < 60) m.fearMortality += 20;
-  m.fearMortality = clamp(m.fearMortality, 0, 100);
+  m.fearMortality = clamp(20 + (m.age > 60 ? 10 : 0) - (m.faith > 80 ? 25 : 0), 0, 100);
 }
 
 function atWar(t1, t2) {
@@ -325,7 +412,6 @@ function atWar(t1, t2) {
     (w.a === t1 && w.b === t2) || (w.a === t2 && w.b === t1)
   );
 }
-
 function warIntensity(t1, t2) {
   const w = state.wars.find(w =>
     (w.a === t1 && w.b === t2) || (w.a === t2 && w.b === t1)
@@ -333,23 +419,33 @@ function warIntensity(t1, t2) {
   return w ? w.intensity : 0;
 }
 
-// ---------- PHYSICS ----------
+// ---------- PHYSICS + TRAILS ----------
 function physicsStep(dt) {
   const agents = state.metabolites.filter(m => m.alive);
+  const sep = state.year < state.separationYears;
+  const homePull = sep ? 0.00055 : 0.00012;
+  const roam = sep ? 0.6 : 1.3;
+
   for (const m of agents) {
-    // mild pull toward tribe homeland
     const home = tribeById(m.tribe);
     if (home) {
-      m.vx += (home.x * W - m.x) * 0.00015;
-      m.vy += (home.y * H - m.y) * 0.00015;
+      m.vx += (home.x * W - m.x) * homePull;
+      m.vy += (home.y * H - m.y) * homePull;
     }
-    // flee density / seek space when stressed
+    // early separation: soft wall if too far from homeland
+    if (sep && home) {
+      const hd = Math.hypot(m.x - home.x * W, m.y - home.y * H);
+      if (hd > 90) {
+        m.vx += (home.x * W - m.x) * 0.002;
+        m.vy += (home.y * H - m.y) * 0.002;
+      }
+    }
     if (m.stress > 50) {
-      m.vx += rand(-0.4, 0.4);
-      m.vy += rand(-0.4, 0.4);
+      m.vx += rand(-0.35, 0.35);
+      m.vy += rand(-0.35, 0.35);
     }
-    m.x += m.vx * dt * 60;
-    m.y += m.vy * dt * 60;
+    m.x += m.vx * dt * 60 * roam;
+    m.y += m.vy * dt * 60 * roam;
     m.vx *= 0.98;
     m.vy *= 0.98;
     const r = m.mass * 11;
@@ -357,6 +453,10 @@ function physicsStep(dt) {
     if (m.x > W - r) { m.x = W - r; m.vx *= -0.8; }
     if (m.y < r) { m.y = r; m.vy *= -0.8; }
     if (m.y > H - r) { m.y = H - r; m.vy *= -0.8; }
+
+    // trail sample
+    m.trail.push({ x: m.x, y: m.y });
+    if (m.trail.length > 14) m.trail.shift();
   }
 
   for (let i = 0; i < agents.length; i++) {
@@ -373,7 +473,6 @@ function physicsStep(dt) {
         a.vx -= dvx * 0.35; a.vy -= dvy * 0.35;
         b.vx += dvx * 0.35; b.vy += dvy * 0.35;
 
-        // combat if at war
         if (a.tribe !== b.tribe && atWar(a.tribe, b.tribe)) {
           const inten = warIntensity(a.tribe, b.tribe);
           if (Math.random() < 0.02 * inten) {
@@ -381,35 +480,37 @@ function physicsStep(dt) {
             loser.money = Math.max(0, loser.money - rand(1, 4));
             loser.fear = clamp(loser.fear + 8, 0, 100);
             loser.stress = clamp(loser.stress + 12, 0, 100);
-            if (Math.random() < 0.08 * inten && loser.age > 15) {
+            adjustRelation(a.tribe, b.tribe, -1.5);
+            if (Math.random() < 0.07 * inten && loser.age > 12) {
               loser.alive = false;
-              log(`War casualty: ${loser.name} of ${loser.tribe} fell in clash`);
+              log(`War casualty: ${loser.name} of ${loser.tribe}`);
             }
           }
-        } else if (a.tribe !== b.tribe) {
-          a.money = Math.max(0, a.money - 0.03);
-          b.money = Math.max(0, b.money - 0.03);
+        } else if (a.tribe !== b.tribe && relation(a.tribe, b.tribe) > 40) {
+          // friendly bump — tiny trust
+          if (Math.random() < 0.02) adjustRelation(a.tribe, b.tribe, 0.15);
         }
       }
     }
   }
 }
 
-// ---------- DAY TICK ----------
-function dayTick() {
-  state.day++;
+// ---------- YEAR TICK ----------
+function yearTick() {
+  state.year++;
   let tasks = 0, offerings = 0, trades = 0, volume = 0;
   const alive = state.metabolites.filter(m => m.alive);
 
-  // density + stress
+  if (state.year === state.separationYears) {
+    log('Borders soften — nations begin to mingle');
+  }
+
+  // density stress
   let stressSum = 0;
   for (const m of alive) {
     const dens = localDensity(m, 55);
     const reg = regionAt(m.x, m.y);
-    let stress = dens * 6;
-    if (dens > 8) stress += 15;
-    if (dens > 14) stress += 25;
-    stress += reg.hazard * 20;
+    let stress = dens * 6 + (dens > 8 ? 15 : 0) + (dens > 14 ? 25 : 0) + reg.hazard * 20;
     if (state.corruption > 50) stress += 8;
     m.stress = clamp(m.stress * 0.85 + stress * 0.15, 0, 100);
     stressSum += m.stress;
@@ -418,7 +519,7 @@ function dayTick() {
   }
   state.globalStress = alive.length ? stressSum / alive.length : 0;
 
-  // wars: start / escalate / cool
+  // --- Dynamic diplomacy ---
   const tribeIds = TRIBES.map(t => t.id);
   for (let i = 0; i < tribeIds.length; i++) {
     for (let j = i + 1; j < tribeIds.length; j++) {
@@ -426,21 +527,47 @@ function dayTick() {
       const membersA = alive.filter(m => m.tribe === ta);
       const membersB = alive.filter(m => m.tribe === tb);
       if (!membersA.length || !membersB.length) continue;
+
+      // proximity goodwill
+      let nearPairs = 0;
+      for (const a of membersA) {
+        for (const b of membersB) {
+          if (dist(a, b) < 60) nearPairs++;
+        }
+      }
+      if (nearPairs > 0 && !atWar(ta, tb)) {
+        adjustRelation(ta, tb, Math.min(1.2, nearPairs * 0.08));
+      }
+
+      // stress friction
+      if (state.globalStress > 55) adjustRelation(ta, tb, -0.25);
+
+      const rel = relation(ta, tb);
       const avgAgg = (
         membersA.reduce((s, m) => s + m.aggression + m.stress * 0.3, 0) / membersA.length +
         membersB.reduce((s, m) => s + m.aggression + m.stress * 0.3, 0) / membersB.length
       ) / 2;
+
       let w = state.wars.find(x => (x.a === ta && x.b === tb) || (x.a === tb && x.b === ta));
-      if (!w && avgAgg > 55 && state.globalStress > 40 && Math.random() < 0.04) {
-        state.wars.push({ a: ta, b: tb, intensity: 1, started: state.day });
-        log(`War declared: ${ta} vs ${tb}`);
+      if (!w && rel < -35 && avgAgg > 50 && state.globalStress > 35 && Math.random() < 0.05) {
+        state.wars.push({ a: ta, b: tb, intensity: 1, started: state.year });
+        setRelation(ta, tb, Math.min(rel, -40));
+        log(`War: ${ta} vs ${tb}`);
       } else if (w) {
-        if (avgAgg > 50) w.intensity = clamp(w.intensity + 0.15, 1, 5);
-        else w.intensity = clamp(w.intensity - 0.25, 0, 5);
-        if (w.intensity <= 0 || (state.day - w.started > 40 && avgAgg < 40)) {
+        if (avgAgg > 48 || rel < -20) w.intensity = clamp(w.intensity + 0.12, 1, 5);
+        else w.intensity = clamp(w.intensity - 0.3, 0, 5);
+        adjustRelation(ta, tb, -0.8);
+        if (w.intensity <= 0 || (rel > 20 && state.year - w.started > 15)) {
           state.wars = state.wars.filter(x => x !== w);
-          log(`Peace: ${ta} & ${tb} end hostilities`);
+          adjustRelation(ta, tb, 12);
+          log(`Peace: ${ta} & ${tb}`);
         }
+      }
+
+      // alliance announcement
+      if (rel >= 55 && Math.random() < 0.02 && !atWar(ta, tb)) {
+        // soft event, not spammy
+        if (Math.random() < 0.3) log(`Alliance warm: ${ta} ↔ ${tb} (${rel.toFixed(0)})`);
       }
     }
   }
@@ -455,30 +582,21 @@ function dayTick() {
     if (m.tradeCooldown > 0) m.tradeCooldown -= 1;
 
     const reg = regionAt(m.x, m.y);
-
-    // work / tasks
     if (Math.random() > 0.06 + m.stress * 0.001) {
       const earn = rand(0.12, 0.48) * reg.fertility;
       m.money += earn;
       state.treasury += earn * 0.15;
       tasks++;
-      // produce a good
       if (Math.random() < 0.25) {
         const g = choice(GOODS);
         m.goods[g] = (m.goods[g] || 0) + 1;
       }
     }
-
-    // offerings
     if (m.belief > 55 && m.money > 8 && m.age > 3 && Math.random() < 0.08) {
       const amt = rand(1, 5);
-      m.money -= amt;
-      offerings += amt;
-      state.treasury += amt;
+      m.money -= amt; offerings += amt; state.treasury += amt;
       m.faith = clamp(m.faith + 1, 0, 100);
     }
-
-    // drift
     m.lust = clamp(m.lust + rand(-1, 1.5), 0, 100);
     m.love = clamp(m.love + rand(-1, 1.2), 0, 100);
     m.fear = clamp(m.fear + rand(-0.8, 1) + (m.stress > 60 ? 0.5 : 0), 0, 100);
@@ -486,65 +604,46 @@ function dayTick() {
 
     if (m.age >= m.lifespan) {
       m.alive = false;
-      log(`${m.name} of ${m.tribe} died at age ${m.age} (${m.stage})`);
+      log(`${m.name} died at age ${m.age}y (${m.stage})`);
       const children = alive.filter(c => c.parentIds.includes(m.id));
       children.forEach(c => {
         c.money += m.money * 0.3;
         c.knowledge += m.knowledge * 0.2;
-        GOODS.forEach(g => { c.goods[g] = (c.goods[g] || 0) + Math.floor((m.goods[g] || 0) * 0.3); });
       });
     }
   }
 
-  // TRADE: nearby agents exchange surplus goods for money
+  // TRADE + diplomacy boost
   const living = state.metabolites.filter(m => m.alive);
   for (let i = 0; i < living.length; i++) {
     const a = living[i];
     if (a.tradeCooldown > 0 || a.stage === 'Birth') continue;
     for (let j = i + 1; j < living.length; j++) {
       const b = living[j];
-      if (b.tradeCooldown > 0) continue;
-      if (dist(a, b) > 45) continue;
-      if (a.tribe !== b.tribe && atWar(a.tribe, b.tribe)) continue; // no trade in war
+      if (b.tradeCooldown > 0 || dist(a, b) > 45) continue;
+      if (a.tribe !== b.tribe && (atWar(a.tribe, b.tribe) || relation(a.tribe, b.tribe) < -15)) continue;
 
-      // find good A has surplus, B lacks
-      let traded = false;
-      for (const g of GOODS) {
-        if ((a.goods[g] || 0) >= 3 && (b.goods[g] || 0) <= 1 && b.money > 2) {
-          const price = rand(1.2, 3.5);
-          a.goods[g] -= 1;
-          b.goods[g] = (b.goods[g] || 0) + 1;
-          b.money -= price;
-          a.money += price * 0.92;
-          state.treasury += price * 0.08;
-          a.tradeCooldown = 3;
-          b.tradeCooldown = 2;
-          a.lastTrade = `sold ${g}`;
-          b.lastTrade = `bought ${g}`;
-          a.trust = clamp(a.trust + 0.01, 0, 1);
-          b.trust = clamp(b.trust + 0.01, 0, 1);
-          trades++;
-          volume += price;
-          traded = true;
-          break;
-        }
-      }
-      if (!traded) {
+      let did = false;
+      for (const pair of [[a, b], [b, a]]) {
+        const [seller, buyer] = pair;
         for (const g of GOODS) {
-          if ((b.goods[g] || 0) >= 3 && (a.goods[g] || 0) <= 1 && a.money > 2) {
+          if ((seller.goods[g] || 0) >= 3 && (buyer.goods[g] || 0) <= 1 && buyer.money > 2) {
             const price = rand(1.2, 3.5);
-            b.goods[g] -= 1;
-            a.goods[g] = (a.goods[g] || 0) + 1;
-            a.money -= price;
-            b.money += price * 0.92;
+            seller.goods[g] -= 1;
+            buyer.goods[g] = (buyer.goods[g] || 0) + 1;
+            buyer.money -= price;
+            seller.money += price * 0.92;
             state.treasury += price * 0.08;
-            a.tradeCooldown = 2;
-            b.tradeCooldown = 3;
-            trades++;
-            volume += price;
+            seller.tradeCooldown = 3;
+            buyer.tradeCooldown = 2;
+            seller.lastTrade = `sold ${g}`;
+            buyer.lastTrade = `bought ${g}`;
+            trades++; volume += price; did = true;
+            if (seller.tribe !== buyer.tribe) adjustRelation(seller.tribe, buyer.tribe, 0.6);
             break;
           }
         }
+        if (did) break;
       }
     }
   }
@@ -553,7 +652,7 @@ function dayTick() {
   state.lastTasks = tasks;
   state.lastOfferings = offerings;
 
-  // reproduction (balanced)
+  // REPRODUCTION + intermarriage
   let birthsToday = 0;
   const maxBirths = living.length < 25 ? 6 : living.length < 50 ? 4 : 2;
   for (let i = 0; i < living.length && birthsToday < maxBirths; i++) {
@@ -562,27 +661,42 @@ function dayTick() {
       if (a.stage !== 'Adult' && a.stage !== 'Middle') continue;
       if (b.stage !== 'Adult' && b.stage !== 'Middle') continue;
       if (a.fertilityCooldown > 0 || b.fertilityCooldown > 0) continue;
-      const sameTribe = a.tribe === b.tribe;
-      if (!sameTribe && Math.random() > 0.08) continue;
-      if (a.tribe !== b.tribe && atWar(a.tribe, b.tribe)) continue;
       if (dist(a, b) > 70) continue;
       if (a.love < 35 || b.love < 35) continue;
       if (a.belief < 35 || b.belief < 35) continue;
       if (a.stress > 85 || b.stress > 85) continue;
+      if (atWar(a.tribe, b.tribe)) continue;
+      if (!canIntermarry(a.tribe, b.tribe)) continue;
 
+      // early years: strongly prefer same tribe
+      if (state.year < state.separationYears && a.tribe !== b.tribe) continue;
+
+      const same = a.tribe === b.tribe;
+      const rel = relation(a.tribe, b.tribe);
       const pairFruit = (a.fruitfulness + b.fruitfulness) / 200;
-      let chance = 0.12 * (0.35 + pairFruit);
+      let chance = 0.11 * (0.35 + pairFruit);
+      if (!same) chance *= 0.55 + rel / 200; // diplomacy gates mixed births
       if (living.length < 18) chance *= 2.2;
       if (living.length < 30) chance *= 1.4;
       if (living.length > 70) chance *= 0.45;
       if (living.length > 100) chance *= 0.25;
 
       if (Math.random() < chance) {
-        const tid = sameTribe ? a.tribe : choice([a.tribe, b.tribe]);
+        const ca = a.color || tribeById(a.tribe).color;
+        const cb = b.color || tribeById(b.tribe).color;
+        const mixT = same ? 0.5 : rand(0.35, 0.65);
+        const childColor = blendColors(ca, cb, mixT);
+        // primary tribe: dominant parent or random if mixed
+        const primary = same ? a.tribe : (Math.random() < mixT ? b.tribe : a.tribe);
         const child = createMetabolite({
-          tribe: tribeById(tid),
-          x: (a.x + b.x) / 2 + rand(-15, 15),
-          y: (a.y + b.y) / 2 + rand(-15, 15),
+          tribe: tribeById(primary),
+          color: childColor,
+          mixed: !same,
+          parentTribes: [a.tribe, b.tribe],
+          parentColors: [ca, cb],
+          mix: mixT,
+          x: (a.x + b.x) / 2 + rand(-12, 12),
+          y: (a.y + b.y) / 2 + rand(-12, 12),
           age: 0,
           money: rand(5, 15),
           belief: clamp((a.belief + b.belief) / 2 + rand(-5, 5), 20, 95),
@@ -594,7 +708,12 @@ function dayTick() {
         a.fertilityCooldown = 8;
         b.fertilityCooldown = 8;
         birthsToday++;
-        log(`Birth: ${child.name} in ${child.tribe}`);
+        if (!same) {
+          adjustRelation(a.tribe, b.tribe, 2.5);
+          log(`Union birth: ${child.name} (${a.tribe}+${b.tribe}) → new colour`);
+        } else {
+          log(`Birth: ${child.name} in ${child.tribe}`);
+        }
       }
     }
   }
@@ -606,7 +725,7 @@ function dayTick() {
   }
 
   state.firmament = clamp(state.firmament + rand(-0.15, 0.25) - state.globalStress * 0.01, 25, 100);
-  state.corruption = clamp(state.corruption + rand(-0.15, 0.08) + (state.wars.length * 0.05), 0, 85);
+  state.corruption = clamp(state.corruption + rand(-0.15, 0.08) + state.wars.length * 0.05, 0, 85);
 
   if (living.length < 25) {
     living.forEach(m => {
@@ -619,71 +738,133 @@ function dayTick() {
 
   document.getElementById('tasks').textContent = tasks;
   document.getElementById('offerings').textContent = '$' + offerings.toFixed(1);
-  document.getElementById('crypto').textContent = state.cryptoSupply.toFixed(0);
   document.getElementById('trades').textContent = trades;
   document.getElementById('volume').textContent = '$' + volume.toFixed(1);
 }
 
-// ---------- RENDER ----------
-function drawMap() {
-  // background gradient
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#0c1220');
-  g.addColorStop(1, '#0a0f0c');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+// ---------- DRAW ----------
+function drawPopulationUnder() {
+  // fade trails
+  trailCtx.fillStyle = 'rgba(9,9,11,0.12)';
+  trailCtx.fillRect(0, 0, W, H);
 
-  // regions
-  for (const r of REGIONS) {
-    const x = r.x * W, y = r.y * H, w = r.w * W, h = r.h * H;
-    ctx.fillStyle = r.fertility > 1.1 ? 'rgba(74,222,128,0.06)' :
-                    r.hazard > 0.4 ? 'rgba(248,113,113,0.07)' : 'rgba(56,189,248,0.04)';
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-    ctx.strokeRect(x, y, w, h);
-    ctx.fillStyle = 'rgba(161,161,170,0.45)';
-    ctx.font = '11px system-ui';
-    ctx.fillText(r.name, x + 8, y + 16);
+  for (const m of state.metabolites) {
+    if (!m.alive || !m.trail || m.trail.length < 2) continue;
+    const col = m.color || tribeById(m.tribe).color;
+    trailCtx.strokeStyle = col + '55';
+    trailCtx.lineWidth = 1.5;
+    trailCtx.beginPath();
+    trailCtx.moveTo(m.trail[0].x, m.trail[0].y);
+    for (let i = 1; i < m.trail.length; i++) {
+      trailCtx.lineTo(m.trail[i].x, m.trail[i].y);
+    }
+    trailCtx.stroke();
   }
+  // composite under layer
+  ctx.drawImage(trailCanvas, 0, 0);
+}
 
-  // tribe homelands
+function drawNationsOver() {
+  if (!nationGrid || nationGrid.length === 0) rebuildNationGrid();
+  for (const cell of nationGrid) {
+    const t = tribeById(cell.tid);
+    ctx.fillStyle = t.color + '18';
+    ctx.fillRect(cell.x, cell.y, cell.s, cell.s);
+  }
+  // borders: sample edges between different nations
+  ctx.lineWidth = 1.2;
+  for (const cell of nationGrid) {
+    const right = nationGrid.find(c => c.x === cell.x + cell.s && c.y === cell.y);
+    const down = nationGrid.find(c => c.x === cell.x && c.y === cell.y + cell.s);
+    if (right && right.tid !== cell.tid) {
+      const ta = tribeById(cell.tid), tb = tribeById(right.tid);
+      const rel = relation(cell.tid, right.tid);
+      ctx.strokeStyle = rel < -30 ? 'rgba(248,113,113,0.55)' :
+                        rel > 50 ? 'rgba(147,197,253,0.4)' :
+                        'rgba(255,255,255,0.12)';
+      ctx.beginPath();
+      ctx.moveTo(cell.x + cell.s, cell.y);
+      ctx.lineTo(cell.x + cell.s, cell.y + cell.s);
+      ctx.stroke();
+    }
+    if (down && down.tid !== cell.tid) {
+      const rel = relation(cell.tid, down.tid);
+      ctx.strokeStyle = rel < -30 ? 'rgba(248,113,113,0.55)' :
+                        rel > 50 ? 'rgba(147,197,253,0.4)' :
+                        'rgba(255,255,255,0.12)';
+      ctx.beginPath();
+      ctx.moveTo(cell.x, cell.y + cell.s);
+      ctx.lineTo(cell.x + cell.s, cell.y + cell.s);
+      ctx.stroke();
+    }
+  }
+  // capital markers + names
   for (const t of TRIBES) {
     const cx = t.x * W, cy = t.y * H;
-    const grd = ctx.createRadialGradient(cx, cy, 10, cx, cy, 70);
-    grd.addColorStop(0, t.color + '33');
-    grd.addColorStop(1, t.color + '00');
-    ctx.fillStyle = grd;
     ctx.beginPath();
-    ctx.arc(cx, cy, 70, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.fillStyle = t.color;
     ctx.fill();
-    ctx.fillStyle = t.color + '99';
-    ctx.font = 'bold 11px system-ui';
-    ctx.fillText(t.name, cx - 18, cy - 48);
+    ctx.strokeStyle = '#fff8';
+    ctx.stroke();
+    ctx.fillStyle = t.color;
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText(t.name, cx + 8, cy - 6);
+  }
+  // war / alliance arcs between capitals
+  for (let i = 0; i < TRIBES.length; i++) {
+    for (let j = i + 1; j < TRIBES.length; j++) {
+      const a = TRIBES[i], b = TRIBES[j];
+      if (atWar(a.id, b.id)) {
+        const inten = warIntensity(a.id, b.id);
+        ctx.strokeStyle = `rgba(248,113,113,${0.3 + inten * 0.1})`;
+        ctx.lineWidth = 1 + inten;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(a.x * W, a.y * H);
+        ctx.lineTo(b.x * W, b.y * H);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (areAllied(a.id, b.id)) {
+        ctx.strokeStyle = 'rgba(147,197,253,0.25)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 6]);
+        ctx.beginPath();
+        ctx.moveTo(a.x * W, a.y * H);
+        ctx.lineTo(b.x * W, b.y * H);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+  }
+}
+
+function drawMap() {
+  ctx.fillStyle = '#09090b';
+  ctx.fillRect(0, 0, W, H);
+
+  // subtle region underlay
+  for (const r of REGIONS) {
+    ctx.fillStyle = r.hazard > 0.4 ? 'rgba(248,113,113,0.04)' : 'rgba(56,189,248,0.03)';
+    ctx.fillRect(r.x * W, r.y * H, r.w * W, r.h * H);
   }
 
-  // war lines between tribe centers
-  for (const w of state.wars) {
-    const ta = tribeById(w.a), tb = tribeById(w.b);
-    if (!ta || !tb) continue;
-    ctx.strokeStyle = `rgba(248,113,113,${0.25 + w.intensity * 0.12})`;
-    ctx.lineWidth = 1 + w.intensity;
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    ctx.moveTo(ta.x * W, ta.y * H);
-    ctx.lineTo(tb.x * W, tb.y * H);
-    ctx.stroke();
-    ctx.setLineDash([]);
+  if (state.mapMode === MAP_POP || state.mapMode === MAP_BOTH) {
+    drawPopulationUnder();
+  }
+  if (state.mapMode === MAP_NATIONS || state.mapMode === MAP_BOTH) {
+    drawNationsOver();
   }
 }
 
 function render() {
   drawMap();
 
+  // agents on top
   for (const m of state.metabolites) {
     if (!m.alive) continue;
-    const tribe = tribeById(m.tribe);
+    const col = m.color || tribeById(m.tribe).color;
     const r = m.mass * 9;
-    // density halo
     if (m.stress > 55) {
       ctx.beginPath();
       ctx.arc(m.x, m.y, r + 8, 0, Math.PI * 2);
@@ -692,13 +873,18 @@ function render() {
     }
     ctx.beginPath();
     ctx.arc(m.x, m.y, r + 3, 0, Math.PI * 2);
-    ctx.fillStyle = tribe.color + '33';
+    ctx.fillStyle = col + '33';
     ctx.fill();
     ctx.beginPath();
     ctx.arc(m.x, m.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = tribe.color;
+    ctx.fillStyle = col;
     ctx.fill();
-    // selection
+    if (m.mixed) {
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, r * 0.35, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff8';
+      ctx.fill();
+    }
     if (m.id === state.selectedId) {
       ctx.beginPath();
       ctx.arc(m.x, m.y, r + 5, 0, Math.PI * 2);
@@ -706,40 +892,51 @@ function render() {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-    // stage ring
     ctx.beginPath();
     ctx.arc(m.x, m.y, r + 2, 0, Math.PI * 2);
     ctx.strokeStyle = m.stage === 'Elder' ? '#f87171' : m.stage === 'Adult' ? '#4ade80' : '#a1a1aa';
-    ctx.lineWidth = 1.4;
+    ctx.lineWidth = 1.3;
     ctx.stroke();
   }
 
-  // UI stats
   const alive = state.metabolites.filter(m => m.alive);
-  document.getElementById('day').textContent = state.day;
+  document.getElementById('year').textContent = state.year;
   document.getElementById('pop').textContent = alive.length;
+  document.getElementById('mixed').textContent = alive.filter(m => m.mixed).length;
   document.getElementById('treasury').textContent = '$' + state.treasury.toFixed(0);
   document.getElementById('firmament').textContent = state.firmament.toFixed(0) + '%';
   document.getElementById('corruption').textContent = state.corruption.toFixed(0) + '%';
-  const avgF = alive.length ? alive.reduce((s, m) => s + m.fruitfulness, 0) / alive.length : 0;
-  document.getElementById('fruit').textContent = avgF.toFixed(0);
   document.getElementById('stress').textContent = state.globalStress.toFixed(0);
   document.getElementById('wars').textContent = state.wars.length;
+  let allies = 0;
+  for (let i = 0; i < TRIBES.length; i++)
+    for (let j = i + 1; j < TRIBES.length; j++)
+      if (areAllied(TRIBES[i].id, TRIBES[j].id)) allies++;
+  document.getElementById('alliances').textContent = allies;
   document.getElementById('yahweh').textContent = '$' + state.yahweh.toLocaleString();
   document.getElementById('serpent').textContent = '$' + state.serpent.toLocaleString();
-  const goodsTotal = alive.reduce((s, m) => s + GOODS.reduce((t, g) => t + (m.goods[g] || 0), 0), 0);
-  document.getElementById('goods').textContent = goodsTotal;
+  document.getElementById('goods').textContent = alive.reduce((s, m) => s + GOODS.reduce((t, g) => t + (m.goods[g] || 0), 0), 0);
 
   document.getElementById('tribes').innerHTML = TRIBES.map(t => {
     const count = alive.filter(m => m.tribe === t.id).length;
-    const war = state.wars.filter(w => w.a === t.id || w.b === t.id).length;
+    const war = state.wars.some(w => w.a === t.id || w.b === t.id);
     return `<div class="stat-row"><span><span class="tribe" style="background:${t.color}"></span>${t.name}${war ? ' ⚔' : ''}</span><span class="stat-value">${count}</span></div>`;
   }).join('');
 
-  document.getElementById('regions').innerHTML = REGIONS.map(r => {
-    const n = alive.filter(m => regionAt(m.x, m.y).id === r.id).length;
-    return `<div class="stat-row"><span class="stat-label">${r.name}</span><span class="stat-value">${n}</span></div>`;
-  }).join('');
+  // diplomacy matrix (compact)
+  let dip = '<table style="width:100%;border-collapse:collapse;font-size:9px">';
+  dip += '<tr><td></td>' + TRIBES.map(t => `<td title="${t.name}" style="color:${t.color}">${t.name.slice(0,2)}</td>`).join('') + '</tr>';
+  for (const a of TRIBES) {
+    dip += `<tr><td style="color:${a.color}">${a.name.slice(0,2)}</td>`;
+    for (const b of TRIBES) {
+      const r = relation(a.id, b.id) | 0;
+      const col = r > 40 ? '#86efac' : r < -20 ? '#fca5a5' : '#a1a1aa';
+      dip += `<td style="color:${col};text-align:center">${a.id === b.id ? '·' : r}</td>`;
+    }
+    dip += '</tr>';
+  }
+  dip += '</table>';
+  document.getElementById('diplomacy').innerHTML = dip;
 
   renderInspector();
 }
@@ -755,16 +952,20 @@ function renderInspector() {
   const reg = regionAt(m.x, m.y);
   const dens = localDensity(m, 55);
   const goodsStr = GOODS.map(g => `${g}:${m.goods[g] || 0}`).join(' · ');
+  const lineage = m.parentTribes && m.parentTribes[0] !== m.parentTribes[1]
+    ? `${m.parentTribes[0]}+${m.parentTribes[1]}` : m.tribe;
   el.innerHTML = `
-    <div class="insp-name" style="color:${tribe.color}">${m.name}</div>
+    <div class="insp-name" style="color:${m.color}">${m.name}</div>
     <div>
       <span class="tag">${m.tribe}</span>
       <span class="tag">${m.stage}</span>
+      ${m.mixed ? '<span class="tag mixed">mixed blood</span>' : ''}
       ${m.stress > 55 ? '<span class="tag dense">dense stress</span>' : ''}
       ${state.wars.some(w => w.a === m.tribe || w.b === m.tribe) ? '<span class="tag war">at war</span>' : ''}
       ${m.lastTrade ? '<span class="tag trade">' + m.lastTrade + '</span>' : ''}
     </div>
-    <div class="insp-row"><span>Age / Life</span><span>${m.age} / ${m.lifespan}</span></div>
+    <div class="insp-row"><span>Lineage</span><span>${lineage}</span></div>
+    <div class="insp-row"><span>Age / Life</span><span>${m.age}y / ${m.lifespan}y</span></div>
     <div class="insp-row"><span>Money</span><span>$${m.money.toFixed(1)}</span></div>
     <div class="insp-row"><span>Region</span><span>${reg.name}</span></div>
     <div class="insp-row"><span>Local density</span><span>${dens}</span></div>
@@ -772,11 +973,9 @@ function renderInspector() {
     <div class="bar"><span style="width:${m.stress}%;background:#f59e0b"></span></div>
     <div class="insp-row"><span>Fruitfulness</span><span>${m.fruitfulness.toFixed(0)}</span></div>
     <div class="bar"><span style="width:${m.fruitfulness}%;background:#4ade80"></span></div>
+    <div class="insp-row"><span>Colour</span><span><span class="tribe" style="background:${m.color}"></span>${m.color}</span></div>
     <div class="insp-row"><span>Faith / Fear</span><span>${m.faith.toFixed(0)} / ${m.fear.toFixed(0)}</span></div>
-    <div class="insp-row"><span>Love / Lust</span><span>${m.love.toFixed(0)} / ${m.lust.toFixed(0)}</span></div>
     <div class="insp-row"><span>Aggression</span><span>${m.aggression.toFixed(0)}</span></div>
-    <div class="insp-row"><span>Belief / Trust</span><span>${m.belief.toFixed(0)} / ${m.trust.toFixed(2)}</span></div>
-    <div class="insp-row"><span>Knowledge</span><span>${m.knowledge.toFixed(0)}</span></div>
     <div class="insp-row"><span>Goods</span><span style="font-size:10px">${goodsStr}</span></div>
   `;
 }
@@ -785,7 +984,6 @@ function renderLog() {
   document.getElementById('log').innerHTML = state.log.map(l => `<div>${l}</div>`).join('');
 }
 
-// click inspect
 canvas.addEventListener('click', (ev) => {
   const rect = canvas.getBoundingClientRect();
   const x = (ev.clientX - rect.left) * (canvas.width / rect.width);
@@ -800,10 +998,8 @@ canvas.addEventListener('click', (ev) => {
   renderInspector();
 });
 
-// ---------- LOOPS ----------
 let lastTime = performance.now();
-let dayAcc = 0;
-const DAY_MS = 2000;
+let yearAcc = 0;
 
 function frame(now) {
   const dt = Math.min(0.05, (now - lastTime) / 1000);
@@ -816,17 +1012,29 @@ function frame(now) {
   }
   if (!state.paused) {
     physicsStep(dt);
-    dayAcc += dt * 1000 * state.speed;
-    while (dayAcc >= DAY_MS) {
-      dayAcc -= DAY_MS;
-      dayTick();
+    yearAcc += dt * 1000 * state.speed;
+    while (yearAcc >= YEAR_MS) {
+      yearAcc -= YEAR_MS;
+      yearTick();
     }
   }
   render();
   requestAnimationFrame(frame);
 }
 
-// ---------- CONTROLS ----------
+function setSpeed(s) {
+  state.speed = s;
+  ['btnSpeed1','btnSpeed2','btnSpeed5'].forEach(id => {
+    document.getElementById(id).classList.toggle('active', id === 'btnSpeed' + s);
+  });
+}
+function setMapMode(mode) {
+  state.mapMode = mode;
+  document.getElementById('btnMapBoth').classList.toggle('active', mode === MAP_BOTH);
+  document.getElementById('btnMapNations').classList.toggle('active', mode === MAP_NATIONS);
+  document.getElementById('btnMapPop').classList.toggle('active', mode === MAP_POP);
+}
+
 document.getElementById('btnPause').onclick = () => {
   state.paused = !state.paused;
   document.getElementById('btnPause').textContent = state.paused ? 'Resume' : 'Pause';
@@ -834,12 +1042,10 @@ document.getElementById('btnPause').onclick = () => {
 document.getElementById('btnSpeed1').onclick = () => setSpeed(1);
 document.getElementById('btnSpeed2').onclick = () => setSpeed(2);
 document.getElementById('btnSpeed5').onclick = () => setSpeed(5);
-function setSpeed(s) {
-  state.speed = s;
-  ['btnSpeed1','btnSpeed2','btnSpeed5'].forEach(id => {
-    document.getElementById(id).classList.toggle('active', id === 'btnSpeed' + s);
-  });
-}
+document.getElementById('btnMapBoth').onclick = () => setMapMode(MAP_BOTH);
+document.getElementById('btnMapNations').onclick = () => setMapMode(MAP_NATIONS);
+document.getElementById('btnMapPop').onclick = () => setMapMode(MAP_POP);
+
 document.getElementById('btnGod').onclick = () => {
   if (state.yahweh < 50) return;
   state.yahweh -= 50;
@@ -851,9 +1057,9 @@ document.getElementById('btnGod').onclick = () => {
     m.stress = clamp(m.stress - 8, 0, 100);
     m.aggression = clamp(m.aggression - 5, 0, 100);
   });
-  // cool wars slightly
+  for (const a of TRIBES) for (const b of TRIBES) if (a.id < b.id) adjustRelation(a.id, b.id, 3);
   state.wars.forEach(w => { w.intensity = clamp(w.intensity - 0.5, 0, 5); });
-  log('Yahweh Bless (+faith, −stress, cooler wars)');
+  log('Yahweh Bless (+faith, diplomacy thaw)');
 };
 document.getElementById('btnSerpent').onclick = () => {
   if (state.serpent < 50) return;
@@ -866,7 +1072,8 @@ document.getElementById('btnSerpent').onclick = () => {
     m.trust = clamp(m.trust - 0.05, 0, 1);
     m.aggression = clamp(m.aggression + 10, 0, 100);
   });
-  log('Serpent Corrupt (+aggression, +corruption)');
+  for (const a of TRIBES) for (const b of TRIBES) if (a.id < b.id) adjustRelation(a.id, b.id, -4);
+  log('Serpent Corrupt (+aggression, diplomacy chill)');
 };
 document.getElementById('btnSave').onclick = () => {
   const data = JSON.stringify(state);
@@ -874,7 +1081,7 @@ document.getElementById('btnSave').onclick = () => {
   const blob = new Blob([data], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `cubitz_day${state.day}.json`;
+  a.download = `cubitz_year${state.year}.json`;
   a.click();
   log('World saved');
 };
@@ -884,6 +1091,8 @@ document.getElementById('btnLoad').onclick = () => {
   try {
     const data = JSON.parse(raw);
     Object.assign(state, data);
+    if (!state.diplomacy) state.diplomacy = initDiplomacy();
+    rebuildNationGrid();
     log('World loaded');
     renderLog();
   } catch (e) { log('Load failed'); }
@@ -891,20 +1100,24 @@ document.getElementById('btnLoad').onclick = () => {
 
 function boot() {
   resize();
+  rebuildNationGrid();
+  // Tribes separated at first — tight homeland clusters only
   for (const t of TRIBES) {
     const n = 5 + Math.floor(Math.random() * 3);
     for (let i = 0; i < n; i++) {
       state.metabolites.push(createMetabolite({
         tribe: t,
-        age: rand(6, 28),
+        spread: 22,
+        age: rand(6, 24),
         money: rand(12, 35),
         belief: rand(45, 85),
         knowledge: rand(8, 35)
       }));
     }
   }
-  log('SYSTEM BOOT — Cubitz world online');
-  log(`${state.metabolites.length} agents · ${REGIONS.length} regions · trade & war systems armed`);
+  log('SYSTEM BOOT — Cubitz nations online');
+  log(`Year tick = ${YEAR_MS / 1000}s · tribes separated for ${state.separationYears} years`);
+  log(`${state.metabolites.length} agents seeded in homeland clusters`);
   requestAnimationFrame(frame);
 }
 boot();
