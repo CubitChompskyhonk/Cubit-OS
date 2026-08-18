@@ -54,7 +54,10 @@ def main(argv: list[str] | None = None) -> int:
     p_api.add_argument("--name", default="default")
 
     p_commerce = sub.add_parser("commerce", help="Optional Stripe commerce status (off by default)")
-    p_commerce.add_argument("action", nargs="?", choices=["status", "wallet"], default="status")
+    p_commerce.add_argument("action", nargs="?", choices=["status", "wallet", "checkout"], default="status")
+    p_commerce.add_argument("--amount", type=float, default=10.0)
+    p_commerce.add_argument("--currency", default="usd")
+    p_commerce.add_argument("--description", default="Cubit OS")
 
     args = parser.parse_args(argv)
 
@@ -251,6 +254,18 @@ def main(argv: list[str] | None = None) -> int:
         from cubit.commerce.stripe_wallet import CommerceGateway
         import json
         gw = CommerceGateway()
+        if args.action == "checkout":
+            if not gw.enabled:
+                print(json.dumps(gw.status(), indent=2))
+                print("Enable with CUBIT_COMMERCE=1 and STRIPE_SECRET_KEY")
+                return 1
+            session = gw.create_checkout(
+                amount_cents=int(args.amount * 100),
+                currency=args.currency,
+                description=args.description,
+            )
+            print(json.dumps(session, indent=2))
+            return 0
         if args.action == "wallet" and gw.enabled:
             print(json.dumps(gw.wallet_summary(), indent=2))
         else:

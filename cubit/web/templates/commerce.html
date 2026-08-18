@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Commerce — Cubit OS{% endblock %}
+{% block content %}
+<h1>Commerce / Wallet</h1>
+<p class="muted">Optional Stripe integration. Free core never requires this.</p>
+
+{% if flash %}
+<div class="card" style="border-color: {% if flash[0]=='good' %}var(--good){% else %}var(--warn){% endif %};">
+  {{ flash[1] }}
+</div>
+{% endif %}
+
+{% if request.query_params.get('dry_run') %}
+<div class="card">
+  <span class="badge warn">dry-run</span>
+  <p>Checkout session <code>{{ request.query_params.get('dry_run') }}</code> recorded locally.
+  Install <code>stripe</code> and set <code>STRIPE_SECRET_KEY</code> for live Checkout redirect.</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <h3>Status</h3>
+  <p>
+    <span class="badge {% if status.enabled %}good{% else %}warn{% endif %}">
+      {{ "Enabled" if status.enabled else "Disabled" }}
+    </span>
+    {% if status.configured %}<span class="badge good">Keys present</span>{% endif %}
+    {% if status.sdk_installed %}<span class="badge">SDK installed</span>{% else %}<span class="badge warn">SDK missing</span>{% endif %}
+    {% if status.webhook_configured %}<span class="badge good">Webhook secret</span>{% endif %}
+  </p>
+  <p class="muted">{{ status.policy }}</p>
+  <p class="muted">Webhook endpoint: <code>{{ status.webhook_path }}</code></p>
+</div>
+
+{% if not status.enabled %}
+<div class="card">
+  <h3>Enable commerce</h3>
+  <pre style="margin:0">export CUBIT_COMMERCE=1
+export STRIPE_SECRET_KEY=sk_test_...
+export STRIPE_PUBLISHABLE_KEY=pk_test_...
+export STRIPE_WEBHOOK_SECRET=whsec_...
+pip install stripe
+# Stripe CLI: stripe listen --forward-to localhost:8080/api/v1/commerce/webhook/stripe</pre>
+</div>
+{% else %}
+<div class="card">
+  <h3>Wallet</h3>
+  {% if wallet %}
+  <p style="font-size:1.6rem;font-weight:700;margin:0.25rem 0">
+    {{ "%.2f"|format((wallet.balance_cents or 0) / 100) }}
+    <span class="muted" style="font-size:0.9rem">{{ wallet.currency|upper }}</span>
+  </p>
+  <p class="muted">Paid sessions: {{ wallet.paid_count }} · Open: {{ wallet.open_count }} · Lifetime paid: {{ "%.2f"|format((wallet.paid_total_cents or 0)/100) }}</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Create Checkout</h3>
+  <form method="post" action="/commerce/checkout" class="stack" style="display:flex;flex-direction:column;gap:0.55rem">
+    <label class="muted">Amount (major units, e.g. 10.00)</label>
+    <input type="text" name="amount" value="10.00" required />
+    <label class="muted">Currency</label>
+    <input type="text" name="currency" value="usd" />
+    <label class="muted">Description</label>
+    <input type="text" name="description" value="Cubit OS" />
+    <label class="muted">Customer email (optional)</label>
+    <input type="text" name="email" placeholder="founder@example.com" />
+    <button type="submit">Open Stripe Checkout</button>
+  </form>
+</div>
+
+{% if wallet and wallet.recent_sessions %}
+<div class="card">
+  <h3>Recent sessions</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Status</th><th>Amount</th><th>When</th></tr></thead>
+    <tbody>
+    {% for s in wallet.recent_sessions %}
+      <tr>
+        <td class="muted" style="font-size:0.8rem">{{ s.id[:20] }}…</td>
+        <td><span class="badge">{{ s.status }}</span>{% if s.dry_run %} <span class="badge warn">dry</span>{% endif %}</td>
+        <td>{{ "%.2f"|format((s.amount_cents or 0)/100) }} {{ (s.currency or 'usd')|upper }}</td>
+        <td class="muted">{{ (s.created or '')[:19] }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if wallet and wallet.recent_events %}
+<div class="card">
+  <h3>Webhook events</h3>
+  <table>
+    <thead><tr><th>Type</th><th>Session</th><th>Received</th></tr></thead>
+    <tbody>
+    {% for e in wallet.recent_events %}
+      <tr>
+        <td>{{ e.type }}</td>
+        <td class="muted">{{ e.session_id or '—' }}</td>
+        <td class="muted">{{ (e.received or '')[:19] }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

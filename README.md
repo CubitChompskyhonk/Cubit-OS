@@ -106,10 +106,18 @@ CLI: `python -m cubit api routes|key|keys`
 export CUBIT_COMMERCE=1
 export STRIPE_SECRET_KEY=sk_test_...
 export STRIPE_PUBLISHABLE_KEY=pk_test_...
+export STRIPE_WEBHOOK_SECRET=whsec_...
 pip install stripe
 
 python -m cubit commerce status
-# API: GET /api/v1/commerce/status  POST /api/v1/commerce/checkout
+python -m cubit commerce checkout --amount 10.00
+python -m cubit web --port 8080
+# UI: http://127.0.0.1:8080/commerce
+# Webhook: POST /api/v1/commerce/webhook/stripe
+# Stripe CLI: stripe listen --forward-to localhost:8080/api/v1/commerce/webhook/stripe
 ```
 
-Android free builds intentionally exclude billing libraries and do not enable commerce.
+Flow: UI/API creates Checkout Session → customer pays on Stripe → webhook `checkout.session.completed` credits local wallet + journal/chronicle.
+
+Android free builds intentionally exclude billing libraries; Commerce screen shows status only.
+

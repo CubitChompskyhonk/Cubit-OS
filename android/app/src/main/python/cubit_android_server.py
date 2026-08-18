@@ -247,6 +247,7 @@ def _toolbar(active: str = "") -> str:
   <a class="dept-chip {'active' if active=='builder' else ''}" href="/dept/builder">Builder</a>
   <a class="dept-chip {'active' if active=='projects' else ''}" href="/projects">Projects</a>
   <a class="dept-chip {'active' if active=='tasks' else ''}" href="/tasks">Tasks</a>
+  <a class="dept-chip {'active' if active=='commerce' else ''}" href="/dept/commerce">Commerce</a>
 </div>
 """
 
@@ -691,6 +692,38 @@ def _make_handler():
             </script>"""
             return _shell("Tasks", body, active_dept="tasks", active_nav="builder")
 
+
+        def _page_commerce(self):
+            from cubit.commerce.stripe_wallet import CommerceGateway
+            gw = CommerceGateway()
+            st = gw.status()
+            wallet = gw.wallet_summary() if gw.enabled else None
+            if not st.get("enabled"):
+                body = """
+                <div class="hero">
+                  <div class="q">Commerce</div>
+                  <h2>Wallet &amp; Stripe</h2>
+                  <p class="muted" style="margin:0">Optional. Free Cubit never requires payments on this device.</p>
+                </div>
+                <div class="card">
+                  <span class="badge warn">Disabled</span>
+                  <p class="muted">Enable on desktop/server with CUBIT_COMMERCE=1. Free APK has no Play Billing.</p>
+                  <p class="muted">Webhook: /api/v1/commerce/webhook/stripe</p>
+                </div>"""
+            else:
+                bal = (wallet or {}).get("balance_cents") or 0
+                body = f"""
+                <div class="hero">
+                  <div class="q">Commerce</div>
+                  <h2>Wallet</h2>
+                </div>
+                <div class="stat-grid">
+                  <div class="stat"><div class="label">Balance</div><div class="value">{bal/100:.2f}</div></div>
+                  <div class="stat"><div class="label">Paid</div><div class="value">{(wallet or {}).get('paid_count',0)}</div></div>
+                </div>
+                <div class="card"><p class="muted">Checkout via desktop web or API POST /api/v1/commerce/checkout</p></div>"""
+            return _shell("Commerce", body, active_dept="commerce", active_nav="chat")
+
         def do_GET(self):
             path = urlparse(self.path).path
             if path == "/api/health":
@@ -709,6 +742,7 @@ def _make_handler():
                 "/dept/advisor": self._page_advisor,
                 "/dept/historian": self._page_historian,
                 "/dept/builder": self._page_builder,
+                "/dept/commerce": self._page_commerce,
                 "/journal": self._page_historian,
                 "/chronicle": self._page_historian,
             }

@@ -208,7 +208,7 @@ def commerce_wallet(principal=None, body=None, query=None) -> ApiResponse:
     if not gw.enabled:
         return ApiResponse.fail(
             "commerce_disabled",
-            "Commerce is off. Set CUBIT_COMMERCE=1 and Stripe keys to enable. Free core remains available without this.",
+            "Commerce is off. Set CUBIT_COMMERCE=1 and Stripe keys to enable.",
         )
     return ApiResponse.success(gw.wallet_summary())
 
@@ -224,9 +224,10 @@ def commerce_checkout(principal=None, body=None, query=None) -> ApiResponse:
             amount_cents=int(body.get("amount_cents") or 0),
             currency=(body.get("currency") or "usd").lower(),
             description=body.get("description") or "Cubit OS",
-            success_url=body.get("success_url") or "http://127.0.0.1:8080/",
-            cancel_url=body.get("cancel_url") or "http://127.0.0.1:8080/",
+            success_url=body.get("success_url") or "http://127.0.0.1:8080/commerce?paid=1",
+            cancel_url=body.get("cancel_url") or "http://127.0.0.1:8080/commerce?cancelled=1",
             metadata=body.get("metadata") or {},
+            customer_email=body.get("customer_email"),
         )
         return ApiResponse.success(session)
     except Exception as e:
@@ -234,13 +235,16 @@ def commerce_checkout(principal=None, body=None, query=None) -> ApiResponse:
 
 
 def commerce_stripe_webhook(principal=None, body=None, query=None) -> ApiResponse:
-    """Webhook path is special: Stripe signature verified inside gateway; API key optional if open webhook secret set."""
     from cubit.commerce.stripe_wallet import CommerceGateway
     gw = CommerceGateway()
     if not gw.enabled:
         return ApiResponse.fail("commerce_disabled", "Commerce disabled.")
     try:
-        result = gw.handle_webhook(payload=body or {}, signature=(query or {}).get("stripe_signature"))
+        # Prefer pre-verified event from FastAPI raw path (body already event dict)
+        if body and body.get("_raw_verified"):
+            result = gw.handle_webhook_event(body.get("event") or body)
+        else:
+            result = gw.handle_webhook(payload=body or {}, signature=(query or {}).get("stripe_signature"))
         return ApiResponse.success(result)
     except Exception as e:
         return ApiResponse.fail("webhook_error", str(e))

@@ -42,24 +42,28 @@ def test_approve_creates_project_and_journal():
     from cubit.ai.conversation import ConversationalLayer
     from cubit.projects.agent import ProjectAgent
     from cubit.journal.store import Journal
+    import time
+    name = f"ApproveMe-{int(time.time())}"
     cl = ConversationalLayer()
-    result = cl.handle("create project ApproveMe")
+    result = cl.handle(f"create project {name}")
     prop_id = result["proposal"]["id"]
     out = cl.approve(prop_id)
     assert out["execution"]["status"] == "executed"
-    assert ProjectAgent().get_project("ApproveMe") is not None
+    assert ProjectAgent().get_project(name) is not None
     entries = Journal().get_entries(entry_type="decision")
-    assert any("ApproveMe" in (e.get("decision") or "") or prop_id in (e.get("related_proposal") or "") for e in entries)
+    assert any(prop_id in (e.get("related_proposal") or "") or name in (e.get("decision") or "") for e in entries)
 
 
 def test_reject_no_project():
     from cubit.ai.conversation import ConversationalLayer
     from cubit.projects.agent import ProjectAgent
+    import time
+    name = f"RejectMe-{int(time.time())}"
     cl = ConversationalLayer()
-    result = cl.handle("create project RejectMe")
+    result = cl.handle(f"create project {name}")
     prop_id = result["proposal"]["id"]
     cl.reject(prop_id)
-    assert ProjectAgent().get_project("RejectMe") is None
+    assert ProjectAgent().get_project(name) is None
 
 
 def test_tasks_grouped():
