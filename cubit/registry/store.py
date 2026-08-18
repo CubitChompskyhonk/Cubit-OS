@@ -6,7 +6,16 @@ from pathlib import Path
 from typing import Any
 
 from cubit.utils import load_json, safe_write_json, data_root
+
 DATA_DIR = data_root() / "registry_data"
+
+_BUILTINS = [
+    ("Steward", "Are we aligned?"),
+    ("Advisor", "What should we consider?"),
+    ("Historian", "Why did we become this?"),
+    ("Builder", "How do we create?"),
+    ("Cubitz", "Living garden simulation — start the world"),
+]
 
 
 class Registry:
@@ -19,11 +28,8 @@ class Registry:
                 self.path,
                 {
                     "departments": [
-                        {"name": "Steward", "description": "Are we aligned?", "status": "active"},
-                        {"name": "Advisor", "description": "What should we consider?", "status": "active"},
-                        {"name": "Historian", "description": "Why did we become this?", "status": "active"},
-                        {"name": "Builder", "description": "How do we create?", "status": "active"},
-                        {"name": "Cubitz", "description": "Living garden simulation — start the world", "status": "active"},
+                        {"name": n, "description": d, "status": "active"}
+                        for n, d in _BUILTINS
                     ]
                 },
             )
@@ -60,25 +66,33 @@ class Registry:
         return entry
 
     def ensure_builtins(self) -> None:
-        """Ensure core departments including Cubitz exist (idempotent)."""
-        builtins = [
-            ("Steward", "Are we aligned?"),
-            ("Advisor", "What should we consider?"),
-            ("Historian", "Why did we become this?"),
-            ("Builder", "How do we create?"),
-            ("Cubitz", "Living garden simulation — start the world"),
-        ]
-        for name, desc in builtins:
-            existing = self.get(name)
-            if not existing:
-                self.register(name, description=desc, status="active")
+        """Ensure core departments exist (uses _load only — no list/get recursion)."""
+        data = self._load()
+        depts = data.get("departments", [])
+        names = {d.get("name") for d in depts}
+        changed = False
+        for name, desc in _BUILTINS:
+            if name not in names:
+                depts.append(
+                    {
+                        "name": name,
+                        "description": desc,
+                        "status": "active",
+                        "created": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    }
+                )
+                changed = True
+        if changed:
+            data["departments"] = depts
+            self._save(data)
 
     def list(self) -> list[dict[str, Any]]:
         self.ensure_builtins()
         return self._load().get("departments", [])
 
     def get(self, name: str) -> dict[str, Any] | None:
-        for d in self.list():
+        # Do not call list() here — avoid recursion with ensure_builtins
+        for d in self._load().get("departments", []):
             if d.get("name") == name:
                 return d
         return None

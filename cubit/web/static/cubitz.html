@@ -96,7 +96,7 @@
       <div class="logo-box">CZ</div>
       <div>
         <h1>Cubitz — Core Simulation</h1>
-        <span class="badge">2s = 1 day • 30 fps physics • Stable Core</span>
+        <span class="badge">2s = 1 day • balanced growth • Stable Core</span>
       </div>
     </div>
     <div class="controls">
@@ -227,8 +227,9 @@ function createMetabolite(opts = {}) {
     vy: rand(-1.2, 1.2),
     mass: rand(0.7, 1.5),
     age: opts.age ?? 0,
-    lifespan: 60,
+    lifespan: 120,
     stage: 'Birth',
+    fertilityCooldown: 0,
     money: opts.money ?? rand(8, 25),
     belief: opts.belief ?? rand(40, 80),
     trust: opts.trust ?? rand(0.4, 0.9),
@@ -249,24 +250,25 @@ function createMetabolite(opts = {}) {
 }
 
 function recalcLifespan(m) {
-  let life = 60;
-  if (m.faith > 70) life += 15;
-  if (m.love > 80) life += 10;
-  if (m.fear > 80) life -= 10;
-  if (m.knowledge > 60) life += 10;
-  if (m.curiosity > 80) life += 5;
-  if (state.firmament < 50) life -= 10;
-  if (state.firmament < 30) life -= 20;
-  if (state.corruption > 50) life -= 10;
-  if (state.corruption > 70) life -= 20;
-  m.lifespan = clamp(life, 30, 200);
+  // Natural span ~90–160 days; world modifiers are mild so populations persist
+  let life = 100 + (m.id % 40); // per-agent variance
+  if (m.faith > 70) life += 20;
+  if (m.love > 70) life += 12;
+  if (m.fear > 85) life -= 8;
+  if (m.knowledge > 60) life += 12;
+  if (m.curiosity > 75) life += 8;
+  if (state.firmament < 40) life -= 8;
+  if (state.firmament < 20) life -= 12;
+  if (state.corruption > 70) life -= 8;
+  if (state.corruption > 90) life -= 12;
+  m.lifespan = clamp(life, 70, 220);
 }
 
 function updateStage(m) {
-  if (m.age < 5) m.stage = 'Birth';
-  else if (m.age < 15) m.stage = 'Youth';
-  else if (m.age < 45) m.stage = 'Adult';
-  else if (m.age < 70) m.stage = 'Middle';
+  if (m.age < 4) m.stage = 'Birth';
+  else if (m.age < 12) m.stage = 'Youth';
+  else if (m.age < 55) m.stage = 'Adult';
+  else if (m.age < 90) m.stage = 'Middle';
   else m.stage = 'Elder';
 }
 
@@ -374,11 +376,13 @@ function dayTick() {
     m.fear = clamp(m.fear + rand(-0.8, 1), 0, 100);
     m.curiosity = clamp(m.curiosity + rand(-0.5, 1), 0, 100);
 
-    // death
+    // fertility cooldown ticks down
+    if (m.fertilityCooldown > 0) m.fertilityCooldown -= 1;
+
+    // death — only when age reaches natural span (longer spans above)
     if (m.age >= m.lifespan) {
       m.alive = false;
       log(`${m.name} of ${m.tribe} died at age ${m.age} (${m.stage}). Last fruitfulness ${m.fruitfulness.toFixed(0)}`);
-      // simple inheritance
       const children = alive.filter(c => c.parentIds.includes(m.id));
       children.forEach(c => {
         c.money += m.money * 0.3;
@@ -387,31 +391,48 @@ function dayTick() {
     }
   }
 
-  // reproduction
-  for (let i = 0; i < alive.length; i++) {
-    for (let j = i + 1; j < alive.length; j++) {
-      const a = alive[i], b = alive[j];
+  // reproduction — tuned for sustainable growth (not instant die-off, not explosion)
+  const living = state.metabolites.filter(m => m.alive);
+  let birthsToday = 0;
+  const maxBirthsPerDay = living.length < 25 ? 6 : living.length < 50 ? 4 : 2;
+  for (let i = 0; i < living.length && birthsToday < maxBirthsPerDay; i++) {
+    for (let j = i + 1; j < living.length && birthsToday < maxBirthsPerDay; j++) {
+      const a = living[i], b = living[j];
       if (a.stage !== 'Adult' && a.stage !== 'Middle') continue;
       if (b.stage !== 'Adult' && b.stage !== 'Middle') continue;
-      if (a.tribe !== b.tribe) continue;
-      if (dist(a, b) > 50) continue;
-      if (a.love < 50 || b.love < 50) continue;
-      if (a.belief < 60 || b.belief < 60) continue;
+      if (a.fertilityCooldown > 0 || b.fertilityCooldown > 0) continue;
+      // same tribe preferred; small chance of mixed near Eden/Zion clusters
+      const sameTribe = a.tribe === b.tribe;
+      if (!sameTribe && Math.random() > 0.08) continue;
+      if (dist(a, b) > 70) continue;
+      if (a.love < 35 || b.love < 35) continue;
+      if (a.belief < 35 || b.belief < 35) continue;
 
-      const chance = 0.05 * ((a.fruitfulness + b.fruitfulness) / 100);
+      const pairFruit = (a.fruitfulness + b.fruitfulness) / 200; // 0–1
+      let chance = 0.12 * (0.35 + pairFruit); // base ~4–12% per eligible pair/day
+      if (living.length < 18) chance *= 2.2;   // recovery when sparse
+      if (living.length < 30) chance *= 1.4;
+      if (living.length > 70) chance *= 0.45;  // soft ceiling
+      if (living.length > 100) chance *= 0.25;
+
       if (Math.random() < chance) {
+        const tribeObj = TRIBES.find(t => t.id === (sameTribe ? a.tribe : choice([a.tribe, b.tribe])));
         const child = createMetabolite({
-          tribe: TRIBES.find(t => t.id === a.tribe),
+          tribe: tribeObj,
           x: (a.x + b.x) / 2 + rand(-15, 15),
           y: (a.y + b.y) / 2 + rand(-15, 15),
+          age: 0,
           money: rand(5, 15),
-          belief: (a.belief + b.belief) / 2,
+          belief: clamp((a.belief + b.belief) / 2 + rand(-5, 5), 20, 95),
           trust: (a.trust + b.trust) / 2,
           knowledge: (a.knowledge + b.knowledge) * 0.15,
           parentIds: [a.id, b.id]
         });
         state.metabolites.push(child);
-        log(`Birth: ${child.name} born to ${a.name} & ${b.name} in ${a.tribe}`);
+        a.fertilityCooldown = 8;
+        b.fertilityCooldown = 8;
+        birthsToday++;
+        log(`Birth: ${child.name} born to ${a.name} & ${b.name} in ${child.tribe}`);
       }
     }
   }
@@ -424,14 +445,20 @@ function dayTick() {
   }
 
   // firmament / corruption drift
-  state.firmament = clamp(state.firmament + rand(-0.3, 0.2), 0, 100);
-  state.corruption = clamp(state.corruption + rand(-0.1, 0.15), 0, 100);
+  state.firmament = clamp(state.firmament + rand(-0.15, 0.25), 25, 100);
+  state.corruption = clamp(state.corruption + rand(-0.15, 0.08), 0, 85);
 
-  // population feedback on lust (invisible system)
-  if (alive.length < 20) {
-    alive.forEach(m => m.lust = clamp(m.lust + 0.5, 0, 100));
-  } else if (alive.length > 80) {
-    alive.forEach(m => m.lust = clamp(m.lust - 0.3, 0, 100));
+  // population feedback — encourage recovery when sparse
+  const popNow = state.metabolites.filter(m => m.alive).length;
+  if (popNow < 25) {
+    state.metabolites.filter(m => m.alive).forEach(m => {
+      m.lust = clamp(m.lust + 1.2, 0, 100);
+      m.love = clamp(m.love + 0.6, 0, 100);
+    });
+  } else if (popNow > 90) {
+    state.metabolites.filter(m => m.alive).forEach(m => {
+      m.lust = clamp(m.lust - 0.5, 0, 100);
+    });
   }
 
   document.getElementById('tasks').textContent = tasks;
@@ -596,12 +623,14 @@ document.getElementById('btnLoad').onclick = () => {
 function boot() {
   // seed initial population
   for (const t of TRIBES) {
-    const n = 4 + Math.floor(Math.random() * 3);
+    const n = 5 + Math.floor(Math.random() * 3); // 5–7 per tribe
     for (let i = 0; i < n; i++) {
       state.metabolites.push(createMetabolite({
         tribe: t,
-        age: rand(10, 40),
-        money: rand(10, 40)
+        age: rand(6, 28), // mostly youth/young adult — room to grow
+        money: rand(12, 35),
+        belief: rand(45, 85),
+        knowledge: rand(8, 35)
       }));
     }
   }
