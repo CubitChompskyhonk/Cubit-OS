@@ -3,92 +3,151 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cubitz — Nations & Years</title>
+  <title>CUBITZ.EXE — Metabolic Life Simulator</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #000000;
+      --panel: #0000aa;
+      --panel2: #000084;
+      --text: #aaaaaa;
+      --bright: #ffffff;
+      --green: #55ff55;
+      --yellow: #ffff55;
+      --cyan: #55ffff;
+      --magenta: #ff55ff;
+      --red: #ff5555;
+      --dim: #555555;
+      --border: #55ffff;
+    }
     body {
-      background: #0a0a0f; color: #e4e4e7;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      min-height: 100vh; display: flex; flex-direction: column;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Courier New", Courier, monospace;
+      font-size: 13px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      image-rendering: pixelated;
     }
     header {
-      background: rgba(10,10,15,0.95); border-bottom: 1px solid #27272a;
-      padding: 10px 16px; display: flex; align-items: center;
-      justify-content: space-between; flex-wrap: wrap; gap: 10px;
-      position: sticky; top: 0; z-index: 50;
+      background: var(--panel);
+      border-bottom: 2px solid var(--cyan);
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
     }
-    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo { display: flex; align-items: center; gap: 8px; }
     .logo-box {
-      width: 36px; height: 36px;
-      background: linear-gradient(135deg, #fbbf24, #d97706);
-      border-radius: 9px; display: flex; align-items: center; justify-content: center;
-      font-weight: 900; color: #000; font-size: 14px;
+      width: 28px; height: 28px;
+      background: var(--yellow);
+      color: #000;
+      font-weight: 900;
+      font-size: 12px;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid var(--bright);
     }
-    h1 { font-size: 16px; font-weight: 800; }
+    h1 { font-size: 14px; font-weight: 700; color: var(--yellow); letter-spacing: 0.04em; }
     .badge {
-      font-size: 10px; padding: 2px 8px; border-radius: 999px;
-      background: rgba(245,158,11,0.15); color: #fcd34d;
-      border: 1px solid rgba(245,158,11,0.3); font-family: monospace;
+      font-size: 10px; color: var(--cyan);
+      border: 1px solid var(--dim); padding: 1px 6px;
     }
-    .controls { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-    button {
-      background: #18181b; border: 1px solid #3f3f46; color: #e4e4e7;
-      padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
+    .controls { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+    button, select, input[type="text"] {
+      background: #000;
+      border: 1px solid var(--text);
+      color: var(--bright);
+      padding: 4px 8px;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      border-radius: 0;
     }
-    button:hover { background: #27272a; }
-    button.active { background: #f59e0b; color: #000; border-color: #f59e0b; }
-    button.god { border-color: #fbbf24; color: #fcd34d; }
-    button.serpent { border-color: #ef4444; color: #fca5a5; }
+    button:hover, button:focus { background: var(--panel); color: var(--yellow); border-color: var(--yellow); }
+    button.active { background: var(--green); color: #000; border-color: var(--green); }
+    button.god { border-color: var(--yellow); color: var(--yellow); }
+    button.serpent { border-color: var(--red); color: var(--red); }
+    select { max-width: 140px; }
     main { display: flex; flex: 1; overflow: hidden; min-height: 0; }
-    #world { flex: 1; background: #09090b; position: relative; min-width: 0; }
-    canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+    #world {
+      flex: 1; background: #000; position: relative; min-width: 0;
+      border-right: 2px solid var(--cyan);
+    }
+    canvas { display: block; width: 100%; height: 100%; cursor: crosshair; image-rendering: pixelated; }
     aside {
-      width: min(380px, 44vw); background: #0f0f14; border-left: 1px solid #27272a;
-      overflow-y: auto; padding: 12px; font-size: 12px;
+      width: min(360px, 44vw);
+      background: #000;
+      border-left: 2px solid var(--dim);
+      overflow-y: auto;
+      padding: 8px;
     }
     @media (max-width: 720px) {
       main { flex-direction: column; }
-      aside { width: 100%; max-height: 42vh; border-left: none; border-top: 1px solid #27272a; }
+      aside { width: 100%; max-height: 42vh; border-left: none; border-top: 2px solid var(--cyan); }
     }
     .panel {
-      background: #18181b; border: 1px solid #27272a; border-radius: 12px;
-      padding: 12px; margin-bottom: 10px;
+      background: #000;
+      border: 1px solid var(--text);
+      padding: 8px;
+      margin-bottom: 8px;
     }
     .panel h3 {
-      font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
-      color: #71717a; margin-bottom: 8px; font-weight: 700;
+      font-size: 11px;
+      color: var(--yellow);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid var(--dim);
+      padding-bottom: 3px;
     }
-    .stat-row { display: flex; justify-content: space-between; margin: 3px 0; gap: 8px; }
-    .stat-label { color: #a1a1aa; }
-    .stat-value { font-family: monospace; font-weight: 600; }
-    .tribe { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
-    .log { max-height: 130px; overflow-y: auto; font-size: 11px; font-family: monospace; color: #a1a1aa; line-height: 1.35; }
+    .stat-row { display: flex; justify-content: space-between; margin: 2px 0; gap: 8px; }
+    .stat-label { color: var(--text); }
+    .stat-value { color: var(--green); font-weight: 700; }
+    .tribe { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border: 1px solid #fff; }
+    .log {
+      max-height: 120px; overflow-y: auto;
+      font-size: 11px; color: var(--cyan); line-height: 1.3;
+    }
     .log div { margin-bottom: 2px; }
     footer {
-      border-top: 1px solid #27272a; padding: 6px 16px;
-      font-size: 11px; color: #52525b; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px;
+      border-top: 2px solid var(--panel);
+      background: var(--panel);
+      padding: 4px 10px;
+      font-size: 11px;
+      color: var(--yellow);
+      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px;
     }
-    .bar { height: 6px; background: #27272a; border-radius: 99px; overflow: hidden; margin-top: 4px; }
-    .bar > span { display: block; height: 100%; border-radius: 99px; }
+    .bar { height: 8px; background: #000; border: 1px solid var(--dim); margin-top: 3px; }
+    .bar > span { display: block; height: 100%; background: var(--green); }
     .insp-row { display: flex; justify-content: space-between; margin: 2px 0; font-size: 11px; }
-    .insp-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-    .tag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 99px; background: #27272a; margin: 2px 2px 0 0; }
-    .tag.war { background: #3f1d1d; color: #fca5a5; }
-    .tag.trade { background: #1a2e1a; color: #86efac; }
-    .tag.dense { background: #3a2a12; color: #fcd34d; }
-    .tag.ally { background: #1e293b; color: #93c5fd; }
-    .tag.mixed { background: #312e81; color: #c4b5fd; }
-    .hint { color: #71717a; font-size: 11px; margin-top: 6px; }
-    .dip-cell { font-size: 10px; font-family: monospace; }
+    .insp-name { font-size: 14px; font-weight: 700; color: var(--yellow); margin-bottom: 4px; }
+    .tag {
+      display: inline-block; font-size: 10px; padding: 1px 5px;
+      border: 1px solid var(--dim); color: var(--cyan); margin: 2px 2px 0 0;
+    }
+    .tag.war { border-color: var(--red); color: var(--red); }
+    .tag.trade { border-color: var(--green); color: var(--green); }
+    .tag.dense { border-color: var(--yellow); color: var(--yellow); }
+    .hint { color: var(--dim); font-size: 11px; margin-top: 4px; }
+    .dip-cell table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .dip-cell td { border: 1px solid #333; padding: 1px 2px; text-align: center; color: var(--text); }
+    #traitBoxes label { color: var(--text); }
+    #traitBoxes input { accent-color: var(--green); }
   </style>
 </head>
 <body>
   <header>
     <div class="logo">
-      <div class="logo-box">CZ</div>
+      <div class="logo-box">C&gt;</div>
       <div>
-        <h1>Cubitz — Nations & Years</h1>
-        <span class="badge">living ecosystem · seasons · forage · plague · migration</span>
+        <h1>CUBITZ.EXE</h1>
+        <span class="badge">MS-DOS MODE · ECOSYSTEM · SOCIETY</span>
       </div>
     </div>
     <div class="controls">
@@ -198,7 +257,7 @@
   </main>
 
   <footer>
-    <span>Cubitz · nation map over · population flow under · year ticks · diplomacy</span>
+    <span>C:\CUBIT\CUBITZ.EXE · YEAR TICK · DOS UI · LIVING ECOSYSTEM</span>
     <span id="fps">—</span>
   </footer>
 
@@ -208,13 +267,13 @@
 // ============================================================
 
 const TRIBES = [
-  { id: 'canaan',  name: 'Canaan',  color: '#fbbf24', x: 0.16, y: 0.28 },
-  { id: 'zion',    name: 'Zion',    color: '#a78bfa', x: 0.38, y: 0.20 },
-  { id: 'babel',   name: 'Babel',   color: '#38bdf8', x: 0.60, y: 0.34 },
-  { id: 'galilee', name: 'Galilee', color: '#2dd4bf', x: 0.80, y: 0.24 },
-  { id: 'gehenna', name: 'Gehenna', color: '#f87171', x: 0.22, y: 0.70 },
-  { id: 'eden',    name: 'Eden',    color: '#4ade80', x: 0.50, y: 0.74 },
-  { id: 'sinai',   name: 'Sinai',   color: '#facc15', x: 0.76, y: 0.66 }
+  { id: 'canaan',  name: 'Canaan',  color: '#ffff55', x: 0.18, y: 0.32, traits: ['agrarian'], gov: 'clan', religion: 'folk', taxRate: 0.08, society: 'pastoral' },
+  { id: 'zion',    name: 'Zion',    color: '#55ffff', x: 0.38, y: 0.22, traits: ['devout'], gov: 'theocracy', religion: 'orthodox', taxRate: 0.12, society: 'temple' },
+  { id: 'babel',   name: 'Babel',   color: '#55ff55', x: 0.58, y: 0.38, traits: ['mercantile'], gov: 'merchant_league', religion: 'folk', taxRate: 0.14, society: 'urban' },
+  { id: 'galilee', name: 'Galilee', color: '#55ff55', x: 0.78, y: 0.26, traits: ['agrarian'], gov: 'clan', religion: 'folk', taxRate: 0.09, society: 'rural' },
+  { id: 'gehenna', name: 'Gehenna', color: '#ff5555', x: 0.28, y: 0.68, traits: ['martial'], gov: 'war_council', religion: 'folk', taxRate: 0.15, society: 'militant' },
+  { id: 'eden',    name: 'Eden',    color: '#55ff55', x: 0.52, y: 0.72, traits: ['scholarly'], gov: 'clan', religion: 'philosophic', taxRate: 0.07, society: 'garden' },
+  { id: 'sinai',   name: 'Sinai',   color: '#ffff55', x: 0.74, y: 0.62, traits: ['nomadic'], gov: 'clan', religion: 'orthodox', taxRate: 0.06, society: 'nomad' }
 ];
 
 const REGIONS = [
@@ -770,8 +829,9 @@ function yearTick() {
   for (const t of TRIBES) {
     const members = alive.filter(m => m.tribe === t.id);
     if (!members.length) continue;
-    const rate = state.taxRate[t.id] || 0.1;
-    const gov = state.gov[t.id] || 'clan';
+    const rate = (t.taxRate != null ? t.taxRate : state.taxRate[t.id]) || 0.1;
+    const gov = t.gov || state.gov[t.id] || 'clan';
+    const society = t.society || 'tribal';
     // tax collection
     for (const m of members) {
       const due = m.money * rate * (gov === 'merchant_league' ? 0.9 : gov === 'war_council' ? 1.15 : 1);
@@ -786,7 +846,12 @@ function yearTick() {
     if (gov === 'theocracy') members.forEach(m => { m.faith = clamp(m.faith + 0.5, 0, 100); m.belief = clamp(m.belief + 0.3, 0, 100); });
     if (gov === 'merchant_league') members.forEach(m => { if (Math.random() < 0.05) m.money += rand(0.5, 2); });
     // religion
-    const rel = state.religion[t.id] || 'folk';
+    const rel = t.religion || state.religion[t.id] || 'folk';
+    // society-type pressure
+    if (society === 'militant') members.forEach(m => { m.aggression = clamp(m.aggression + 0.25, 0, 100); });
+    if (society === 'urban') members.forEach(m => { if (Math.random() < 0.04) m.money += rand(0.3, 1.2); });
+    if (society === 'garden') members.forEach(m => { m.stress = clamp(m.stress - 0.3, 0, 100); });
+    if (society === 'nomad') members.forEach(m => { m.vx += rand(-0.1, 0.1); m.vy += rand(-0.1, 0.1); });
     if (rel === 'orthodox') members.forEach(m => { m.fearMortality = clamp((m.fearMortality||20) - 0.3, 0, 100); });
     if (rel === 'philosophic') members.forEach(m => { m.knowledge = clamp(m.knowledge + 0.25, 0, 100); });
   }
@@ -1169,11 +1234,11 @@ function drawNationsOver() {
 function drawMap() {
   ctx.fillStyle = '#09090b';
   ctx.fillRect(0, 0, W, H);
-  // weather tint
-  if (state.weather === 'rain') { ctx.fillStyle = 'rgba(56,189,248,0.05)'; ctx.fillRect(0,0,W,H); }
-  if (state.weather === 'storm') { ctx.fillStyle = 'rgba(30,30,60,0.12)'; ctx.fillRect(0,0,W,H); }
-  if (state.weather === 'heat' || state.weather === 'drought') { ctx.fillStyle = 'rgba(251,146,60,0.06)'; ctx.fillRect(0,0,W,H); }
-  if (state.weather === 'cold') { ctx.fillStyle = 'rgba(186,230,253,0.06)'; ctx.fillRect(0,0,W,H); }
+  // DOS weather tint (chunky)
+  if (state.weather === 'rain') { ctx.fillStyle = 'rgba(85,255,255,0.06)'; ctx.fillRect(0,0,W,H); }
+  if (state.weather === 'storm') { ctx.fillStyle = 'rgba(85,85,255,0.1)'; ctx.fillRect(0,0,W,H); }
+  if (state.weather === 'heat' || state.weather === 'drought') { ctx.fillStyle = 'rgba(255,255,85,0.06)'; ctx.fillRect(0,0,W,H); }
+  if (state.weather === 'cold') { ctx.fillStyle = 'rgba(85,255,255,0.05)'; ctx.fillRect(0,0,W,H); }
 
   // subtle region underlay
   for (const r of REGIONS) {
@@ -1377,7 +1442,11 @@ function createNewTribe(nameOpt) {
   const tribe = {
     id, name, color, x, y,
     traits: traits.slice(),
-    mods: traitMods(traits)
+    mods: traitMods(traits),
+    gov: traits.includes('martial') ? 'war_council' : traits.includes('mercantile') ? 'merchant_league' : traits.includes('devout') ? 'theocracy' : 'clan',
+    religion: traits.includes('devout') ? 'orthodox' : traits.includes('scholarly') ? 'philosophic' : 'folk',
+    taxRate: traits.includes('mercantile') ? 0.12 : traits.includes('agrarian') ? 0.08 : 0.1,
+    society: traits.includes('martial') ? 'militant' : traits.includes('mercantile') ? 'urban' : traits.includes('nomadic') ? 'nomad' : traits.includes('agrarian') ? 'rural' : traits.includes('scholarly') ? 'garden' : traits.includes('devout') ? 'temple' : 'tribal'
   };
   TRIBES.push(tribe);
   if (!state.diplomacy) state.diplomacy = {};
@@ -1391,10 +1460,10 @@ function createNewTribe(nameOpt) {
   // government / religion defaults influenced by traits
   if (!state.gov) state.gov = {};
   if (!state.religion) state.religion = {};
-  state.gov[id] = traits.includes('martial') ? 'war_council' : traits.includes('mercantile') ? 'merchant_league' : traits.includes('devout') ? 'theocracy' : 'clan';
-  state.religion[id] = traits.includes('devout') ? 'orthodox' : traits.includes('scholarly') ? 'philosophic' : 'folk';
+  state.gov[id] = tribe.gov;
+  state.religion[id] = tribe.religion;
   state.taxRate = state.taxRate || {};
-  state.taxRate[id] = traits.includes('mercantile') ? 0.12 : traits.includes('agrarian') ? 0.08 : 0.1;
+  state.taxRate[id] = tribe.taxRate;
 
   for (let i = 0; i < 5; i++) {
     const opts = {
@@ -1614,11 +1683,15 @@ function boot() {
   rebuildNationGrid();
   for (const r of REGIONS) state.forage[r.id] = 40 + r.fertility * 40;
   for (const t of TRIBES) {
-    state.gov[t.id] = state.gov[t.id] || 'clan';
-    state.religion[t.id] = state.religion[t.id] || 'folk';
-    state.taxRate[t.id] = state.taxRate[t.id] || 0.1;
+    if (!t.gov) t.gov = 'clan';
+    if (!t.religion) t.religion = 'folk';
+    if (t.taxRate == null) t.taxRate = 0.1;
+    if (!t.society) t.society = 'tribal';
     if (!t.traits) t.traits = [];
     if (!t.mods) t.mods = traitMods(t.traits || []);
+    state.gov[t.id] = t.gov;
+    state.religion[t.id] = t.religion;
+    state.taxRate[t.id] = t.taxRate;
   }
   // Tribes separated at first — tight homeland clusters only
   for (const t of TRIBES) {

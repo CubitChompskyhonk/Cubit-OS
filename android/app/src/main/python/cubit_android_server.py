@@ -265,12 +265,18 @@ def _splash() -> str:
 </div>
 <script>
 (function(){
+  if (sessionStorage.getItem('cubit_boot_done') === '1') {
+    var s0 = document.getElementById('cubit-splash');
+    if (s0) s0.remove();
+    return;
+  }
   const s = document.getElementById('cubit-splash');
   const a = document.getElementById('boot-audio');
   let done = false;
   function enterApp(){
     if (done) return;
     done = true;
+    try { sessionStorage.setItem('cubit_boot_done','1'); } catch(e) {}
     if(s){ s.classList.add('hide'); setTimeout(function(){ if(s&&s.parentNode)s.remove(); },700); }
   }
   function showTap(){
@@ -357,7 +363,7 @@ def _bottom_nav(active: str = "chat") -> str:
     return f'<nav class="bottom-nav">{"".join(links)}</nav>'
 
 
-def _shell(title: str, body: str, active_dept: str = "", active_nav: str = "chat") -> str:
+def _shell(title: str, body: str, active_dept: str = "", active_nav: str = "chat", show_splash: bool = False) -> str:
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -368,7 +374,7 @@ def _shell(title: str, body: str, active_dept: str = "", active_nav: str = "chat
 <style>{CSS}</style>
 </head>
 <body>
-{_splash()}
+{_splash() if show_splash else ""}
 {_toolbar(active_dept)}
 <div class="page">
 {body}
@@ -473,7 +479,7 @@ def _make_handler():
               const d=await r.json();add('bot',d.message||JSON.stringify(d));setTimeout(()=>location.reload(),500);}}
             document.getElementById('msg').addEventListener('keydown',e=>{{if(e.key==='Enter')send();}});
             </script>"""
-            return _shell("Chat", body, active_nav="chat")
+            return _shell("Chat", body, active_nav="chat", show_splash=True)
 
         def _page_steward(self):
             r = steward.review()

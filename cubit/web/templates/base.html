@@ -43,12 +43,18 @@
   </div>
   <script>
   (function(){
+    if (sessionStorage.getItem('cubit_boot_done') === '1') {
+      var s0 = document.getElementById('cubit-splash');
+      if (s0) s0.remove();
+      return;
+    }
     const s = document.getElementById('cubit-splash');
     const a = document.getElementById('boot-audio');
     let done = false;
     function enterApp(){
       if (done) return;
       done = true;
+      try { sessionStorage.setItem('cubit_boot_done','1'); } catch(e) {}
       if(s){ s.classList.add('hide'); setTimeout(function(){ if(s&&s.parentNode)s.remove(); },700); }
     }
     function showTap(){
