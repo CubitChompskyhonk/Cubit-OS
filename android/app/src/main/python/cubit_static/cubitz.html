@@ -191,11 +191,18 @@
         <div class="stat-row"><span class="stat-label">Weather</span><span class="stat-value" id="weather">—</span></div>
         <div class="stat-row"><span class="stat-label">Plague</span><span class="stat-value" id="plague">0</span></div>
         <div class="stat-row"><span class="stat-label">Migrations</span><span class="stat-value" id="migrations">0</span></div>
+        <div class="stat-row"><span class="stat-label">Complexity</span><span class="stat-value" id="complexity">T1</span></div>
+        <div class="stat-row"><span class="stat-label">Fallen nations</span><span class="stat-value" id="fallen">0</span></div>
       </div>
 
       <div class="panel" id="inspectorPanel">
         <h3>Character Inspector</h3>
         <div id="inspector"><p class="hint">Click an agent on the map to inspect.</p></div>
+      </div>
+
+      <div class="panel" id="nationInspectorPanel">
+        <h3>Nation Inspector</h3>
+        <div id="nationInspector"><p class="hint">Click a capital or nation name to inspect.</p></div>
       </div>
 
       <div class="panel">
@@ -365,7 +372,11 @@ const state = {
   mediaMood: 0, // -100..100
   zeitgeist: 'emergence',
   commsLevel: 1, // 1 oral 2 script 3 print 4 broadcast
-  taxRevenueYear: 0
+  taxRevenueYear: 0,
+  complexityTier: 1,
+  selectedNationId: null,
+  fallenNations: [],
+  lastConquestYear: -99
 };
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
@@ -718,6 +729,241 @@ function tickMetabolic(m) {
   }
 }
 
+
+// ---------- LEADERS · POLICY · CONQUEST · COMPLEXITY ----------
+const POLICIES = ['expand', 'defend', 'trade', 'convert', 'raid', 'develop'];
+
+function leaderScore(m) {
+  if (!m || !m.alive) return -1;
+  return m.money * 0.3 + m.knowledge * 0.5 + m.aggression * 0.4 + m.faith * 0.2 + m.belief * 0.2 + (m.stage === 'Elder' ? 8 : 0) + (m.stage === 'Adult' ? 5 : 0);
+}
+
+function electLeaders() {
+  for (const t of TRIBES) {
+    const members = state.metabolites.filter(m => m.alive && m.tribe === t.id);
+    if (!members.length) {
+      t.leaderId = null;
+      t.leaderName = null;
+      t.policy = 'defend';
+      continue;
+    }
+    let best = members[0], bestS = leaderScore(members[0]);
+    for (const m of members) {
+      const s = leaderScore(m);
+      if (s > bestS) { best = m; bestS = s; }
+    }
+    const prev = t.leaderId;
+    t.leaderId = best.id;
+    t.leaderName = best.name;
+    // policy from leader personality + gov + complexity
+    if (!t.policy || t.leaderId !== prev || Math.random() < 0.15) {
+      t.policy = choosePolicy(t, best);
+    }
+  }
+}
+
+function choosePolicy(tribe, leader) {
+  const tier = state.complexityTier || 1;
+  const weights = { expand: 1, defend: 1, trade: 1, convert: 0.5, raid: 0.5, develop: 0.5 };
+  if (leader.aggression > 55) { weights.raid += 2; weights.expand += 1.5; }
+  if (leader.knowledge > 50) { weights.develop += 2; weights.trade += 1; }
+  if (leader.faith > 60) { weights.convert += 2; weights.defend += 1; }
+  if (tribe.gov === 'war_council') { weights.raid += 2; weights.expand += 1; }
+  if (tribe.gov === 'merchant_league') { weights.trade += 2; weights.develop += 1; }
+  if (tribe.gov === 'theocracy') { weights.convert += 2; weights.defend += 1; }
+  if (tribe.society === 'militant') weights.raid += 1.5;
+  if (tribe.society === 'urban') weights.trade += 1.5;
+  if (tier < 2) { weights.raid *= 0.3; weights.convert *= 0.3; weights.develop *= 0.5; }
+  if (tier < 3) { weights.raid *= 0.6; }
+  // weighted pick
+  let total = 0;
+  for (const k of POLICIES) total += weights[k] || 0;
+  let r = Math.random() * total;
+  for (const k of POLICIES) {
+    r -= weights[k] || 0;
+    if (r <= 0) return k;
+  }
+  return 'defend';
+}
+
+function executePolicies() {
+  const alive = state.metabolites.filter(m => m.alive);
+  for (const t of TRIBES) {
+    const members = alive.filter(m => m.tribe === t.id);
+    if (!members.length || !t.policy) continue;
+    const pol = t.policy;
+    if (pol === 'expand') {
+      // push outward from homeland
+      members.forEach(m => {
+        m.vx += (Math.random() - 0.5) * 0.4;
+        m.vy += (Math.random() - 0.5) * 0.4;
+        m.aggression = clamp(m.aggression + 0.3, 0, 100);
+      });
+    } else if (pol === 'defend') {
+      const home = t;
+      members.forEach(m => {
+        m.vx += (home.x * W - m.x) * 0.0004;
+        m.vy += (home.y * H - m.y) * 0.0004;
+        m.stress = clamp(m.stress - 0.4, 0, 100);
+      });
+    } else if (pol === 'trade') {
+      members.forEach(m => {
+        m.money += rand(0.2, 0.8);
+        if (Math.random() < 0.1) m.goods[choice(GOODS)] = (m.goods[choice(GOODS)] || 0) + 1;
+      });
+      // improve relations slightly with non-war neighbors
+      for (const o of TRIBES) {
+        if (o.id === t.id || atWar(t.id, o.id)) continue;
+        if (Math.random() < 0.2) adjustRelation(t.id, o.id, 0.8);
+      }
+    } else if (pol === 'convert') {
+      members.forEach(m => { m.faith = clamp(m.faith + 0.6, 0, 100); m.belief = clamp(m.belief + 0.4, 0, 100); });
+    } else if (pol === 'raid') {
+      members.forEach(m => { m.aggression = clamp(m.aggression + 1.2, 0, 100); });
+      // chance to start war with weaker neighbor
+      if (state.complexityTier >= 2 && Math.random() < 0.08) {
+        let target = null, weakest = 1e9;
+        for (const o of TRIBES) {
+          if (o.id === t.id || atWar(t.id, o.id)) continue;
+          const n = alive.filter(m => m.tribe === o.id).length;
+          if (n > 0 && n < weakest) { weakest = n; target = o; }
+        }
+        if (target && weakest < members.length * 0.85) {
+          state.wars.push({ a: t.id, b: target.id, intensity: 1.5, started: state.year });
+          setRelation(t.id, target.id, -45);
+          log(`Leader ${t.leaderName} of ${t.name} orders RAID on ${target.name}`);
+        }
+      }
+    } else if (pol === 'develop') {
+      members.forEach(m => {
+        m.knowledge = clamp(m.knowledge + 0.5, 0, 100);
+        m.money += rand(0.1, 0.4);
+      });
+      if (Math.random() < 0.05) state.forage[choice(REGIONS).id] = clamp((state.forage[choice(REGIONS).id] || 30) + 5, 0, 120);
+    }
+  }
+}
+
+function nationPower(tribeId) {
+  const members = state.metabolites.filter(m => m.alive && m.tribe === tribeId);
+  if (!members.length) return 0;
+  const wealth = members.reduce((s, m) => s + m.money, 0);
+  const arms = members.reduce((s, m) => s + m.aggression, 0) / members.length;
+  return members.length * 3 + wealth * 0.15 + arms * 0.5;
+}
+
+function processConquest() {
+  if ((state.complexityTier || 1) < 2) return;
+  if (state.year - (state.lastConquestYear || -99) < 5) return;
+  const alive = state.metabolites.filter(m => m.alive);
+
+  // Annex: war pair where one side is much stronger and longer war
+  for (const w of [...state.wars]) {
+    if ((state.year - w.started) < 8) continue;
+    const pa = nationPower(w.a), pb = nationPower(w.b);
+    if (pa < 1 || pb < 1) continue;
+    let winner = null, loser = null;
+    if (pa > pb * 2.2) { winner = w.a; loser = w.b; }
+    else if (pb > pa * 2.2) { winner = w.b; loser = w.a; }
+    if (!winner) continue;
+    const winT = tribeById(winner), loseT = tribeById(loser);
+    if (!winT || !loseT) continue;
+    // absorb population
+    const absorbed = alive.filter(m => m.tribe === loser);
+    absorbed.forEach(m => {
+      m.tribe = winner;
+      m.fear = clamp(m.fear + 15, 0, 100);
+      m.stress = clamp(m.stress + 20, 0, 100);
+      // mixed color toward winner
+      m.color = blendColors(m.color || loseT.color, winT.color, 0.35);
+      m.mixed = true;
+      m.parentTribes = [loser, winner];
+    });
+    state.fallenNations = state.fallenNations || [];
+    state.fallenNations.push({ id: loseT.id, name: loseT.name, year: state.year, by: winT.name, survivors: absorbed.length });
+    // remove loser tribe
+    const idx = TRIBES.findIndex(t => t.id === loser);
+    if (idx >= 0) TRIBES.splice(idx, 1);
+    state.wars = state.wars.filter(x => x.a !== loser && x.b !== loser);
+    // diplomacy cleanup
+    if (state.diplomacy[loser]) delete state.diplomacy[loser];
+    for (const k of Object.keys(state.diplomacy)) {
+      if (state.diplomacy[k]) delete state.diplomacy[k][loser];
+    }
+    state.lastConquestYear = state.year;
+    log(`CONQUEST: ${winT.name} annexes ${loseT.name} (${absorbed.length} absorbed)`);
+    // winner may reform society
+    if (Math.random() < 0.4) {
+      winT.society = 'empire';
+      winT.gov = winT.gov === 'clan' ? 'war_council' : winT.gov;
+      log(`${winT.name} declares imperial order under ${winT.leaderName || 'its leader'}`);
+    }
+    rebuildNationGrid();
+    refreshNationSelect(true);
+    return; // one conquest per pulse
+  }
+
+  // Collapse: nation with 0 pop already handled; very weak isolated may fracture into new nation
+  if ((state.complexityTier || 1) >= 3 && Math.random() < 0.03 && TRIBES.length < 12) {
+    for (const t of TRIBES) {
+      const members = alive.filter(m => m.tribe === t.id);
+      if (members.length < 8 || members.length > 25) continue;
+      if ((t.policy === 'expand' || t.society === 'empire') && Math.random() < 0.25) {
+        // secession: half become new nation
+        const seceders = members.filter((_, i) => i % 2 === 0).slice(0, Math.floor(members.length / 2));
+        if (seceders.length < 3) continue;
+        const newId = (t.id + '_r' + state.year).slice(0, 16);
+        if (TRIBES.some(x => x.id === newId)) continue;
+        const nn = {
+          id: newId,
+          name: t.name + ' Remnant',
+          color: blendColors(t.color, '#ffffff', 0.25),
+          x: clamp(t.x + rand(-0.1, 0.1), 0.1, 0.9),
+          y: clamp(t.y + rand(-0.1, 0.1), 0.1, 0.9),
+          traits: (t.traits || []).slice(),
+          gov: 'clan',
+          religion: t.religion || 'folk',
+          taxRate: 0.08,
+          society: 'tribal',
+          policy: 'defend',
+          leaderId: null,
+          leaderName: null
+        };
+        TRIBES.push(nn);
+        seceders.forEach(m => { m.tribe = newId; m.color = nn.color; });
+        if (!state.diplomacy[newId]) state.diplomacy[newId] = {};
+        for (const o of TRIBES) {
+          if (!state.diplomacy[o.id]) state.diplomacy[o.id] = {};
+          if (o.id === newId) state.diplomacy[newId][newId] = 100;
+          else { state.diplomacy[newId][o.id] = o.id === t.id ? -20 : 0; state.diplomacy[o.id][newId] = o.id === t.id ? -20 : 0; }
+        }
+        setRelation(t.id, newId, -25);
+        log(`RISE: ${nn.name} breaks from ${t.name}`);
+        rebuildNationGrid();
+        refreshNationSelect(true);
+        return;
+      }
+    }
+  }
+}
+
+function updateComplexity() {
+  // Tier grows with year, knowledge, market, comms
+  const alive = state.metabolites.filter(m => m.alive);
+  const avgK = alive.length ? alive.reduce((s, m) => s + m.knowledge, 0) / alive.length : 0;
+  let tier = 1;
+  if (state.year >= 20 || avgK > 30) tier = 2;
+  if (state.year >= 50 || state.commsLevel >= 3 || state.stockIndex > 130) tier = 3;
+  if (state.year >= 90 || state.commsLevel >= 4 || (state.fallenNations || []).length >= 2) tier = 4;
+  if (tier > (state.complexityTier || 1)) {
+    state.complexityTier = tier;
+    const names = { 2: 'Leaders & raids unlock', 3: 'Conquest & secession unlock', 4: 'Imperial age' };
+    log(`COMPLEXITY TIER ${tier}: ${names[tier] || 'advanced era'}`);
+  } else {
+    state.complexityTier = Math.max(state.complexityTier || 1, tier);
+  }
+}
+
 // ---------- YEAR TICK ----------
 function yearTick() {
   state.year++;
@@ -725,10 +971,13 @@ function yearTick() {
   const alive = state.metabolites.filter(m => m.alive);
 
   if (state.year === state.separationYears) {
-    log('Borders soften — nations begin to mingle');
+    log('borders soften — nations begin to mingle');
   }
-  // political over-map tracks lived population
   if (state.year % 3 === 0) rebuildNationGrid();
+  updateComplexity();
+  electLeaders();
+  executePolicies();
+  processConquest();
 
   // density stress
   let stressSum = 0;
@@ -1324,6 +1573,10 @@ function render() {
   if (pl) pl.textContent = (state.plague || 0).toFixed(1);
   const mg = document.getElementById('migrations');
   if (mg) mg.textContent = (state.ecosystem && state.ecosystem.migrations) || 0;
+  const cx = document.getElementById('complexity');
+  if (cx) cx.textContent = 'T' + (state.complexityTier || 1);
+  const fn = document.getElementById('fallen');
+  if (fn) fn.textContent = (state.fallenNations || []).length;
   let allies = 0;
   for (let i = 0; i < TRIBES.length; i++)
     for (let j = i + 1; j < TRIBES.length; j++)
@@ -1355,6 +1608,52 @@ function render() {
   document.getElementById('diplomacy').innerHTML = dip;
 
   renderInspector();
+  renderNationInspector();
+}
+
+
+function renderNationInspector() {
+  const el = document.getElementById('nationInspector');
+  if (!el) return;
+  const id = state.selectedNationId;
+  const t = id ? tribeById(id) : null;
+  if (!t) {
+    el.innerHTML = '<p class="hint">Click a capital marker or nation in the list.</p>';
+    return;
+  }
+  const members = state.metabolites.filter(m => m.alive && m.tribe === t.id);
+  const power = nationPower(t.id).toFixed(0);
+  const wealth = members.reduce((s, m) => s + m.money, 0).toFixed(0);
+  const avgAgg = members.length ? (members.reduce((s, m) => s + m.aggression, 0) / members.length).toFixed(0) : 0;
+  const wars = state.wars.filter(w => w.a === t.id || w.b === t.id);
+  const warList = wars.map(w => (w.a === t.id ? w.b : w.a) + '@' + w.intensity.toFixed(1)).join(', ') || 'none';
+  el.innerHTML = `
+    <div class="insp-name" style="color:${t.color}">${t.name}</div>
+    <div>
+      <span class="tag">${t.gov || 'clan'}</span>
+      <span class="tag">${t.society || 'tribal'}</span>
+      <span class="tag">${t.religion || 'folk'}</span>
+      <span class="tag">${t.policy || '—'}</span>
+    </div>
+    <div class="insp-row"><span>Leader</span><span>${t.leaderName || 'vacant'}</span></div>
+    <div class="insp-row"><span>Policy</span><span style="color:var(--yellow)">${t.policy || '—'}</span></div>
+    <div class="insp-row"><span>Population</span><span>${members.length}</span></div>
+    <div class="insp-row"><span>Power</span><span>${power}</span></div>
+    <div class="insp-row"><span>Wealth</span><span>$${wealth}</span></div>
+    <div class="insp-row"><span>Avg aggression</span><span>${avgAgg}</span></div>
+    <div class="insp-row"><span>Tax rate</span><span>${((t.taxRate||0.1)*100).toFixed(0)}%</span></div>
+    <div class="insp-row"><span>Traits</span><span>${(t.traits||[]).join(', ')||'—'}</span></div>
+    <div class="insp-row"><span>Wars</span><span>${warList}</span></div>
+    <div class="insp-row"><span>Complexity</span><span>T${state.complexityTier||1}</span></div>
+  `;
+}
+
+function selectNation(id) {
+  state.selectedNationId = id;
+  state.selectedId = null;
+  renderNationInspector();
+  renderInspector();
+  renderNationInspector();
 }
 
 function renderInspector() {
@@ -1516,6 +1815,7 @@ function grantToNation(nationId, kind) {
     log(`Cursed nation ${nationId} with ${CURSES[key].label} (${members.length} agents)`);
   }
   renderInspector();
+  renderNationInspector();
 }
 
 function renderLog() {
@@ -1526,6 +1826,12 @@ canvas.addEventListener('click', (ev) => {
   const rect = canvas.getBoundingClientRect();
   const x = (ev.clientX - rect.left) * (canvas.width / rect.width);
   const y = (ev.clientY - rect.top) * (canvas.height / rect.height);
+  let hitNation = null, nDist = 22;
+  for (const t of TRIBES) {
+    const d = Math.hypot(t.x * W - x, t.y * H - y);
+    if (d < nDist) { nDist = d; hitNation = t.id; }
+  }
+  if (hitNation) { selectNation(hitNation); return; }
   let best = null, bestD = 18;
   for (const m of state.metabolites) {
     if (!m.alive) continue;
@@ -1533,7 +1839,9 @@ canvas.addEventListener('click', (ev) => {
     if (d < bestD) { bestD = d; best = m; }
   }
   state.selectedId = best ? best.id : null;
+  if (best) state.selectedNationId = best.tribe;
   renderInspector();
+  renderNationInspector();
 });
 
 let lastTime = performance.now();
@@ -1631,6 +1939,7 @@ document.getElementById('btnBlessOne').onclick = () => {
   grantBlessing(m, key);
   log(`Blessed ${m.name} with ${BLESSINGS[key].label} (${BLESSINGS[key].years}y)`);
   renderInspector();
+  renderNationInspector();
 };
 document.getElementById('btnSerpent').onclick = () => {
   if (state.serpent < 50) return;
@@ -1654,6 +1963,7 @@ document.getElementById('btnCurseOne').onclick = () => {
   grantCurse(m, key);
   log(`Cursed ${m.name} with ${CURSES[key].label} (${CURSES[key].years}y)`);
   renderInspector();
+  renderNationInspector();
 };
 document.getElementById('btnSave').onclick = () => {
   const data = JSON.stringify(state);
@@ -1708,6 +2018,7 @@ function boot() {
     }
   }
   log('SYSTEM BOOT — Cubitz nations online');
+  electLeaders();
   refreshNationSelect(true);
   log(`Year tick = ${YEAR_MS / 1000}s · tribes separated for ${state.separationYears} years`);
   log(`${state.metabolites.length} agents seeded in homeland clusters`);
