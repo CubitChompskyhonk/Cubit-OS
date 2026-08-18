@@ -121,3 +121,15 @@ Flow: UI/API creates Checkout Session → customer pays on Stripe → webhook `c
 
 Android free builds intentionally exclude billing libraries; Commerce screen shows status only.
 
+
+
+## Personal Advocate
+
+Offline background agent for the Founder. Queues work (calls, email drafts, appointments, sales, PR) and advances it locally. Does **not** place real calls or send mail without a future explicit connector and Founder action.
+
+```bash
+python -m cubit advocate status
+python -m cubit advocate add --type email --title "Partner update" --contact "a@b.c"
+python -m cubit advocate process --steps 5
+# API: GET/POST /api/v1/advocate/*
+```

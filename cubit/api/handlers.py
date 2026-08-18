@@ -248,3 +248,53 @@ def commerce_stripe_webhook(principal=None, body=None, query=None) -> ApiRespons
         return ApiResponse.success(result)
     except Exception as e:
         return ApiResponse.fail("webhook_error", str(e))
+
+
+# ── Advocate (personal offline agent) ───────────────────────────────
+
+def advocate_status(principal=None, body=None, query=None) -> ApiResponse:
+    from cubit.advocate.agent import AdvocateAgent
+    return ApiResponse.success(AdvocateAgent().status())
+
+
+def advocate_list(principal=None, body=None, query=None) -> ApiResponse:
+    from cubit.advocate.agent import AdvocateAgent
+    q = query or {}
+    return ApiResponse.success({
+        "tasks": AdvocateAgent().list_tasks(status=q.get("status"), limit=int(q.get("limit") or 50))
+    })
+
+
+def advocate_enqueue(principal=None, body=None, query=None) -> ApiResponse:
+    from cubit.advocate.agent import AdvocateAgent
+    body = body or {}
+    try:
+        task = AdvocateAgent().enqueue(
+            task_type=body.get("type") or body.get("task_type") or "",
+            title=body.get("title") or "",
+            details=body.get("details") or "",
+            contact=body.get("contact") or "",
+            due=body.get("due"),
+            priority=body.get("priority") or "normal",
+            metadata=body.get("metadata"),
+        )
+        return ApiResponse.success({"task": task})
+    except ValueError as e:
+        return ApiResponse.fail("validation", str(e))
+
+
+def advocate_process(principal=None, body=None, query=None) -> ApiResponse:
+    from cubit.advocate.agent import AdvocateAgent
+    n = int((body or {}).get("max_steps") or (query or {}).get("max_steps") or 5)
+    return ApiResponse.success(AdvocateAgent().process_offline(max_steps=n))
+
+
+def advocate_cancel(principal=None, body=None, query=None) -> ApiResponse:
+    from cubit.advocate.agent import AdvocateAgent
+    tid = (body or {}).get("id") or (query or {}).get("id")
+    if not tid:
+        return ApiResponse.fail("validation", "id required")
+    out = AdvocateAgent().cancel(tid)
+    if not out:
+        return ApiResponse.fail("not_found", "task not found or not cancellable")
+    return ApiResponse.success({"task": out})

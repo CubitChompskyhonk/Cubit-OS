@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Advocate — Cubit OS{% endblock %}
+{% block content %}
+<h1>Personal Advocate</h1>
+<p class="muted">Offline agent for the Founder — queues calls, email drafts, appointments, sales, and PR. Processes in the background without silent external spam.</p>
+<div class="card">
+  <h3>Status</h3>
+  <pre id="status" class="muted" style="white-space:pre-wrap">Loading…</pre>
+</div>
+<div class="card stack">
+  <h3>Queue work</h3>
+  <select id="type">
+    <option value="email">email</option>
+    <option value="phonecall">phonecall</option>
+    <option value="appointment">appointment</option>
+    <option value="sales">sales</option>
+    <option value="pr">pr</option>
+    <option value="research">research</option>
+    <option value="followup">followup</option>
+  </select>
+  <input type="text" id="title" placeholder="Title"/>
+  <input type="text" id="contact" placeholder="Contact"/>
+  <input type="text" id="details" placeholder="Details"/>
+  <div class="row" style="display:flex;gap:0.5rem;margin-top:0.5rem">
+    <button type="button" onclick="addTask()">Enqueue</button>
+    <button type="button" class="secondary" onclick="processQ()">Process offline</button>
+  </div>
+</div>
+<div class="card"><h3>Tasks</h3><pre id="tasks" style="white-space:pre-wrap;font-size:0.85rem"></pre></div>
+<script>
+async function refresh() {
+  const s = await fetch('/api/v1/advocate/status', {headers:{'Authorization':'Bearer open'}}).then(r=>r.json()).catch(()=>null);
+  document.getElementById('status').textContent = s ? JSON.stringify(s.data || s, null, 2) : 'API open mode or key required (CUBIT_API_OPEN=1)';
+  const t = await fetch('/api/v1/advocate/tasks', {headers:{'Authorization':'Bearer open'}}).then(r=>r.json()).catch(()=>null);
+  document.getElementById('tasks').textContent = t ? JSON.stringify((t.data||t).tasks || t, null, 2) : '—';
+}
+async function addTask() {
+  await fetch('/api/v1/advocate/tasks', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer open'},
+    body: JSON.stringify({
+      type: document.getElementById('type').value,
+      title: document.getElementById('title').value,
+      contact: document.getElementById('contact').value,
+      details: document.getElementById('details').value
+    })
+  });
+  refresh();
+}
+async function processQ() {
+  await fetch('/api/v1/advocate/process', {method:'POST', headers:{'Authorization':'Bearer open','Content-Type':'application/json'}, body:'{}'});
+  refresh();
+}
+refresh();
+</script>
+{% endblock %}

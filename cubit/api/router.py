@@ -100,3 +100,9 @@ class ApiRouter:
         self.add("GET", "/commerce/wallet", "read", h.commerce_wallet)
         self.add("POST", "/commerce/checkout", "write", h.commerce_checkout)
         self.add("POST", "/commerce/webhook/stripe", "write", h.commerce_stripe_webhook)
+
+        self.add("GET", "/advocate/status", "read", h.advocate_status)
+        self.add("GET", "/advocate/tasks", "read", h.advocate_list)
+        self.add("POST", "/advocate/tasks", "write", h.advocate_enqueue)
+        self.add("POST", "/advocate/process", "write", h.advocate_process)
+        self.add("POST", "/advocate/tasks/{id}/cancel", "write", h.advocate_cancel)

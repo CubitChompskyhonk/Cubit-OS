@@ -88,7 +88,7 @@
       <div class="logo-box">CZ</div>
       <div>
         <h1>Cubitz — Nations & Years</h1>
-        <span class="badge">nations · population flow · diplomacy · years</span>
+        <span class="badge">metabolic life · blessings · nations · years</span>
       </div>
     </div>
     <div class="controls">
@@ -101,8 +101,10 @@
       <button id="btnMapPop">Population</button>
       <button id="btnSave">Save</button>
       <button id="btnLoad">Load</button>
-      <button id="btnGod" class="god">Yahweh Bless</button>
-      <button id="btnSerpent" class="serpent">Serpent Corrupt</button>
+      <button id="btnGod" class="god">Yahweh Bless All</button>
+      <button id="btnBlessOne" class="god">Bless Selected</button>
+      <button id="btnSerpent" class="serpent">Serpent Corrupt All</button>
+      <button id="btnCurseOne" class="serpent">Curse Selected</button>
     </div>
   </header>
 
@@ -379,6 +381,13 @@ function createMetabolite(opts = {}) {
     knowledge: opts.knowledge ?? rand(5, 40),
     awareness: 0, fearMortality: 20, fruitfulness: 0,
     stress: 0, aggression: rand(10, 40),
+    energy: rand(55, 95),
+    hunger: rand(10, 40),
+    metabolism: rand(0.7, 1.3),
+    blessing: null,
+    curse: null,
+    blessingYears: 0,
+    curseYears: 0,
     goods,
     fertilityCooldown: 0,
     tradeCooldown: 0,
@@ -511,6 +520,94 @@ function physicsStep(dt) {
         }
       }
     }
+  }
+}
+
+
+// ---------- Blessings & Curses (targeted or global) ----------
+const BLESSINGS = {
+  vitality: { label: 'Vitality', years: 12, apply(m) { m.energy = clamp(m.energy + 25, 0, 100); m.hunger = clamp(m.hunger - 15, 0, 100); } },
+  fertility: { label: 'Fertility', years: 10, apply(m) { m.lust = clamp(m.lust + 20, 0, 100); m.love = clamp(m.love + 15, 0, 100); m.fruitfulness = clamp((m.fruitfulness||0)+15,0,100); } },
+  wisdom: { label: 'Wisdom', years: 15, apply(m) { m.knowledge = clamp(m.knowledge + 20, 0, 100); m.belief = clamp(m.belief + 10, 0, 100); m.faith = clamp(m.faith + 12, 0, 100); } },
+  prosperity: { label: 'Prosperity', years: 8, apply(m) { m.money += 18; GOODS.forEach(g => { m.goods[g] = (m.goods[g]||0) + 2; }); } },
+  peace: { label: 'Peace', years: 10, apply(m) { m.stress = clamp(m.stress - 30, 0, 100); m.aggression = clamp(m.aggression - 20, 0, 100); m.fear = clamp(m.fear - 15, 0, 100); } },
+  endurance: { label: 'Endurance', years: 14, apply(m) { m.lifespan = clamp(m.lifespan + 12, 50, 140); m.metabolism = clamp(m.metabolism * 0.9, 0.4, 1.6); } },
+};
+
+const CURSES = {
+  famine: { label: 'Famine', years: 10, apply(m) { m.hunger = clamp(m.hunger + 30, 0, 100); m.energy = clamp(m.energy - 20, 0, 100); } },
+  wrath: { label: 'Wrath', years: 8, apply(m) { m.aggression = clamp(m.aggression + 25, 0, 100); m.stress = clamp(m.stress + 20, 0, 100); m.love = clamp(m.love - 10, 0, 100); } },
+  blight: { label: 'Blight', years: 12, apply(m) { m.lifespan = clamp(m.lifespan - 10, 40, 140); m.metabolism = clamp(m.metabolism * 1.15, 0.4, 1.8); m.energy = clamp(m.energy - 15, 0, 100); } },
+  discord: { label: 'Discord', years: 9, apply(m) { m.trust = clamp(m.trust - 0.15, 0, 1); m.fear = clamp(m.fear + 18, 0, 100); m.belief = clamp(m.belief - 10, 0, 100); } },
+  barren: { label: 'Barren', years: 11, apply(m) { m.lust = clamp(m.lust - 25, 0, 100); m.fruitfulness = clamp((m.fruitfulness||0)-20,0,100); m.fertilityCooldown = Math.max(m.fertilityCooldown||0, 15); } },
+  debt: { label: 'Debt', years: 7, apply(m) { m.money = Math.max(0, m.money - 22); GOODS.forEach(g => { m.goods[g] = Math.max(0, (m.goods[g]||0) - 1); }); } },
+};
+
+function pickBlessing() {
+  const keys = Object.keys(BLESSINGS);
+  return keys[Math.floor(Math.random() * keys.length)];
+}
+function pickCurse() {
+  const keys = Object.keys(CURSES);
+  return keys[Math.floor(Math.random() * keys.length)];
+}
+
+function grantBlessing(m, key) {
+  const b = BLESSINGS[key];
+  if (!m || !b) return;
+  m.blessing = key;
+  m.blessingYears = b.years;
+  m.curse = null; m.curseYears = 0;
+  b.apply(m);
+  m.faith = clamp(m.faith + 5, 0, 100);
+}
+
+function grantCurse(m, key) {
+  const c = CURSES[key];
+  if (!m || !c) return;
+  m.curse = key;
+  m.curseYears = c.years;
+  c.apply(m);
+  m.fear = clamp(m.fear + 5, 0, 100);
+}
+
+function tickMetabolic(m) {
+  // Metabolic life loop: hunger rises, energy drains, food restores
+  const rate = m.metabolism || 1;
+  m.hunger = clamp(m.hunger + 3.5 * rate, 0, 100);
+  m.energy = clamp(m.energy - 2.2 * rate - (m.hunger > 70 ? 1.5 : 0), 0, 100);
+  // eat grain/spice if hungry
+  if (m.hunger > 45) {
+    if ((m.goods.grain || 0) > 0) {
+      m.goods.grain -= 1;
+      m.hunger = clamp(m.hunger - 28, 0, 100);
+      m.energy = clamp(m.energy + 18, 0, 100);
+    } else if ((m.goods.spice || 0) > 0) {
+      m.goods.spice -= 1;
+      m.hunger = clamp(m.hunger - 12, 0, 100);
+      m.energy = clamp(m.energy + 8, 0, 100);
+    }
+  }
+  // blessing/curse duration
+  if (m.blessingYears > 0) {
+    m.blessingYears -= 1;
+    if (m.blessing && BLESSINGS[m.blessing]) {
+      // mild ongoing tick
+      if (m.blessing === 'vitality') m.energy = clamp(m.energy + 2, 0, 100);
+      if (m.blessing === 'peace') m.stress = clamp(m.stress - 2, 0, 100);
+    }
+    if (m.blessingYears <= 0) { m.blessing = null; }
+  }
+  if (m.curseYears > 0) {
+    m.curseYears -= 1;
+    if (m.curse === 'famine') m.hunger = clamp(m.hunger + 4, 0, 100);
+    if (m.curse === 'blight') m.energy = clamp(m.energy - 2, 0, 100);
+    if (m.curseYears <= 0) { m.curse = null; }
+  }
+  // metabolic death risk only at extreme depletion + age
+  if (m.energy < 5 && m.hunger > 92 && m.age > 40 && Math.random() < 0.04) {
+    m.alive = false;
+    log(`${m.name} collapsed from metabolic failure`);
   }
 }
 
@@ -990,6 +1087,11 @@ function renderInspector() {
     <div class="insp-row"><span>Money</span><span>$${m.money.toFixed(1)}</span></div>
     <div class="insp-row"><span>Region</span><span>${reg.name}</span></div>
     <div class="insp-row"><span>Local density</span><span>${dens}</span></div>
+    <div class="insp-row"><span>Energy / Hunger</span><span>${(m.energy||0).toFixed(0)} / ${(m.hunger||0).toFixed(0)}</span></div>
+    <div class="bar"><span style="width:${m.energy||0}%;background:#38bdf8"></span></div>
+    <div class="insp-row"><span>Metabolism</span><span>${(m.metabolism||1).toFixed(2)}</span></div>
+    <div class="insp-row"><span>Blessing</span><span>${m.blessing ? (BLESSINGS[m.blessing]?.label||m.blessing)+' ('+m.blessingYears+'y)' : '—'}</span></div>
+    <div class="insp-row"><span>Curse</span><span>${m.curse ? (CURSES[m.curse]?.label||m.curse)+' ('+m.curseYears+'y)' : '—'}</span></div>
     <div class="insp-row"><span>Stress</span><span>${m.stress.toFixed(0)}</span></div>
     <div class="bar"><span style="width:${m.stress}%;background:#f59e0b"></span></div>
     <div class="insp-row"><span>Fruitfulness</span><span>${m.fruitfulness.toFixed(0)}</span></div>
@@ -1071,30 +1173,48 @@ document.getElementById('btnGod').onclick = () => {
   if (state.yahweh < 50) return;
   state.yahweh -= 50;
   state.firmament = clamp(state.firmament + 2, 0, 100);
+  const key = pickBlessing();
   state.metabolites.filter(m => m.alive).forEach(m => {
-    m.faith = clamp(m.faith + 8, 0, 100);
-    m.belief = clamp(m.belief + 5, 0, 100);
-    m.fear = clamp(m.fear - 5, 0, 100);
-    m.stress = clamp(m.stress - 8, 0, 100);
-    m.aggression = clamp(m.aggression - 5, 0, 100);
+    grantBlessing(m, key);
+    m.faith = clamp(m.faith + 6, 0, 100);
+    m.stress = clamp(m.stress - 6, 0, 100);
   });
-  for (const a of TRIBES) for (const b of TRIBES) if (a.id < b.id) adjustRelation(a.id, b.id, 3);
   state.wars.forEach(w => { w.intensity = clamp(w.intensity - 0.5, 0, 5); });
-  log('Yahweh Bless (+faith, diplomacy thaw)');
+  for (const a of TRIBES) for (const b of TRIBES) if (a.id < b.id) adjustRelation(a.id, b.id, 2);
+  log(`Yahweh Bless All — special: ${BLESSINGS[key].label}`);
+};
+document.getElementById('btnBlessOne').onclick = () => {
+  const m = state.metabolites.find(x => x.id === state.selectedId && x.alive);
+  if (!m) { log('Select a Cubitz first (click on map)'); return; }
+  if (state.yahweh < 25) return;
+  state.yahweh -= 25;
+  const key = pickBlessing();
+  grantBlessing(m, key);
+  log(`Blessed ${m.name} with ${BLESSINGS[key].label} (${BLESSINGS[key].years}y)`);
+  renderInspector();
 };
 document.getElementById('btnSerpent').onclick = () => {
   if (state.serpent < 50) return;
   state.serpent -= 50;
   state.corruption = clamp(state.corruption + 3, 0, 100);
   state.firmament = clamp(state.firmament - 1.5, 0, 100);
+  const key = pickCurse();
   state.metabolites.filter(m => m.alive).forEach(m => {
-    m.lust = clamp(m.lust + 10, 0, 100);
-    m.fear = clamp(m.fear + 4, 0, 100);
-    m.trust = clamp(m.trust - 0.05, 0, 1);
-    m.aggression = clamp(m.aggression + 10, 0, 100);
+    grantCurse(m, key);
+    m.aggression = clamp(m.aggression + 8, 0, 100);
   });
-  for (const a of TRIBES) for (const b of TRIBES) if (a.id < b.id) adjustRelation(a.id, b.id, -4);
-  log('Serpent Corrupt (+aggression, diplomacy chill)');
+  for (const a of TRIBES) for (const b of TRIBES) if (a.id < b.id) adjustRelation(a.id, b.id, -2);
+  log(`Serpent Corrupt All — curse: ${CURSES[key].label}`);
+};
+document.getElementById('btnCurseOne').onclick = () => {
+  const m = state.metabolites.find(x => x.id === state.selectedId && x.alive);
+  if (!m) { log('Select a Cubitz first (click on map)'); return; }
+  if (state.serpent < 25) return;
+  state.serpent -= 25;
+  const key = pickCurse();
+  grantCurse(m, key);
+  log(`Cursed ${m.name} with ${CURSES[key].label} (${CURSES[key].years}y)`);
+  renderInspector();
 };
 document.getElementById('btnSave').onclick = () => {
   const data = JSON.stringify(state);

@@ -59,6 +59,16 @@ def main(argv: list[str] | None = None) -> int:
     p_commerce.add_argument("--currency", default="usd")
     p_commerce.add_argument("--description", default="Cubit OS")
 
+
+    p_adv = sub.add_parser("advocate", help="Personal Advocate offline task agent")
+    p_adv.add_argument("action", nargs="?", choices=["status", "list", "add", "process", "cancel"], default="status")
+    p_adv.add_argument("--type", default="email", help="phonecall|email|appointment|sales|pr|research|followup")
+    p_adv.add_argument("--title", default="")
+    p_adv.add_argument("--details", default="")
+    p_adv.add_argument("--contact", default="")
+    p_adv.add_argument("--id", default="")
+    p_adv.add_argument("--steps", type=int, default=5)
+
     args = parser.parse_args(argv)
 
     if args.cmd is None:
@@ -270,6 +280,24 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(gw.wallet_summary(), indent=2))
         else:
             print(json.dumps(gw.status(), indent=2))
+        return 0
+
+
+    if args.cmd == "advocate":
+        from cubit.advocate.agent import AdvocateAgent
+        import json
+        adv = AdvocateAgent()
+        if args.action == "list":
+            print(json.dumps(adv.list_tasks(), indent=2, default=str))
+        elif args.action == "add":
+            task = adv.enqueue(args.type, args.title or "Untitled", args.details, args.contact)
+            print(json.dumps(task, indent=2, default=str))
+        elif args.action == "process":
+            print(json.dumps(adv.process_offline(args.steps), indent=2, default=str))
+        elif args.action == "cancel":
+            print(json.dumps(adv.cancel(args.id) or {"error": "not found"}, indent=2, default=str))
+        else:
+            print(json.dumps(adv.status(), indent=2, default=str))
         return 0
 
     parser.print_help()

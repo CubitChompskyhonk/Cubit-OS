@@ -15,6 +15,7 @@ _BUILTINS = [
     ("Historian", "Why did we become this?"),
     ("Builder", "How do we create?"),
     ("Cubitz", "Living garden simulation — start the world"),
+    ("Advocate", "Personal agent — offline calls, mail, appointments, sales, PR"),
 ]
 
 

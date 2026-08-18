@@ -258,3 +258,6 @@ def page_dept_cubitz(request: Request):
         {"request": request, "active": "cubitz"},
     )
 
+@app.get("/advocate", response_class=HTMLResponse)
+def page_advocate(request: Request):
+    return templates.TemplateResponse("advocate.html", {"request": request})
