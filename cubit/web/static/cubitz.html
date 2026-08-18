@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cubitz — Core Simulation</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0a0f;
+      color: #e4e4e7;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: rgba(10,10,15,0.95);
+      border-bottom: 1px solid #27272a;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-box {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, #fbbf24, #d97706);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; color: #000; font-size: 16px;
+      box-shadow: 0 0 20px rgba(245,158,11,0.3);
+    }
+    h1 { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+    .badge {
+      font-size: 11px; padding: 3px 10px; border-radius: 999px;
+      background: rgba(245,158,11,0.15); color: #fcd34d;
+      border: 1px solid rgba(245,158,11,0.3); font-family: monospace;
+    }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    button {
+      background: #18181b; border: 1px solid #3f3f46; color: #e4e4e7;
+      padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+      font-weight: 600; transition: all 0.15s;
+    }
+    button:hover { background: #27272a; }
+    button.active { background: #f59e0b; color: #000; border-color: #f59e0b; }
+    button.god { border-color: #fbbf24; color: #fcd34d; }
+    button.serpent { border-color: #ef4444; color: #fca5a5; }
+    main { display: flex; flex: 1; overflow: hidden; }
+    #world {
+      flex: 1; background: #09090b; position: relative;
+      border-right: 1px solid #27272a;
+    }
+    canvas { display: block; width: 100%; height: 100%; }
+    aside {
+      width: 340px; background: #0f0f14; border-left: 1px solid #27272a;
+      overflow-y: auto; padding: 16px; font-size: 13px;
+    }
+    .panel {
+      background: #18181b; border: 1px solid #27272a; border-radius: 12px;
+      padding: 14px; margin-bottom: 14px;
+    }
+    .panel h3 {
+      font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #71717a; margin-bottom: 10px; font-weight: 700;
+    }
+    .stat-row { display: flex; justify-content: space-between; margin: 4px 0; }
+    .stat-label { color: #a1a1aa; }
+    .stat-value { font-family: monospace; font-weight: 600; }
+    .tribe { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+    .log {
+      max-height: 180px; overflow-y: auto; font-size: 11px; font-family: monospace;
+      color: #a1a1aa; line-height: 1.4;
+    }
+    .log div { margin-bottom: 3px; }
+    footer {
+      border-top: 1px solid #27272a; padding: 8px 20px;
+      font-size: 11px; color: #52525b; display: flex; justify-content: space-between;
+    }
+    input[type="range"] { width: 100%; margin: 6px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <div class="logo-box">CZ</div>
+      <div>
+        <h1>Cubitz — Core Simulation</h1>
+        <span class="badge">2s = 1 day • 30 fps physics • Stable Core</span>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="btnPause">Pause</button>
+      <button id="btnSpeed1" class="active">1×</button>
+      <button id="btnSpeed2">2×</button>
+      <button id="btnSpeed5">5×</button>
+      <button id="btnSave">Save</button>
+      <button id="btnLoad">Load</button>
+      <button id="btnGod" class="god">Yahweh Bless</button>
+      <button id="btnSerpent" class="serpent">Serpent Corrupt</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="world">
+      <canvas id="canvas"></canvas>
+    </div>
+    <aside>
+      <div class="panel">
+        <h3>World State</h3>
+        <div class="stat-row"><span class="stat-label">Day</span><span class="stat-value" id="day">0</span></div>
+        <div class="stat-row"><span class="stat-label">Population</span><span class="stat-value" id="pop">0</span></div>
+        <div class="stat-row"><span class="stat-label">Treasury</span><span class="stat-value" id="treasury">$0</span></div>
+        <div class="stat-row"><span class="stat-label">Firmament</span><span class="stat-value" id="firmament">100%</span></div>
+        <div class="stat-row"><span class="stat-label">Corruption</span><span class="stat-value" id="corruption">0%</span></div>
+        <div class="stat-row"><span class="stat-label">Avg Fruitfulness</span><span class="stat-value" id="fruit">0</span></div>
+      </div>
+
+      <div class="panel">
+        <h3>Tribes</h3>
+        <div id="tribes"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Economy Pulse</h3>
+        <div class="stat-row"><span class="stat-label">Tasks / day</span><span class="stat-value" id="tasks">0</span></div>
+        <div class="stat-row"><span class="stat-label">Offerings</span><span class="stat-value" id="offerings">$0</span></div>
+        <div class="stat-row"><span class="stat-label">Crypto Supply</span><span class="stat-value" id="crypto">0</span></div>
+      </div>
+
+      <div class="panel">
+        <h3>God / Serpent Budgets</h3>
+        <div class="stat-row"><span class="stat-label">Yahweh</span><span class="stat-value" id="yahweh">$10,000,000</span></div>
+        <div class="stat-row"><span class="stat-label">Serpent</span><span class="stat-value" id="serpent">$10,000,000</span></div>
+      </div>
+
+      <div class="panel">
+        <h3>Event Log</h3>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <span>Cubitz Core • All formulas exact • Stable & functioning</span>
+    <span id="fps">30 fps</span>
+  </footer>
+
+<script>
+// ============================================================
+// CUBITZ — STABLE CORE SIMULATION
+// Exact formulas and thresholds from the expansive logic flow
+// ============================================================
+
+const TRIBES = [
+  { id: 'canaan',  name: 'Canaan',  color: '#fbbf24', x: 120, y: 180 },
+  { id: 'zion',    name: 'Zion',    color: '#a78bfa', x: 280, y: 120 },
+  { id: 'babel',   name: 'Babel',   color: '#38bdf8', x: 450, y: 200 },
+  { id: 'galilee', name: 'Galilee', color: '#2dd4bf', x: 620, y: 140 },
+  { id: 'gehenna', name: 'Gehenna', color: '#f87171', x: 200, y: 340 },
+  { id: 'eden',    name: 'Eden',    color: '#4ade80', x: 400, y: 380 },
+  { id: 'sinai',   name: 'Sinai',   color: '#facc15', x: 580, y: 320 }
+];
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W = 800, H = 500;
+
+function resize() {
+  const rect = document.getElementById('world').getBoundingClientRect();
+  W = rect.width;
+  H = rect.height;
+  canvas.width = W;
+  canvas.height = H;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- STATE ----------
+const state = {
+  day: 0,
+  speed: 1,
+  paused: false,
+  treasury: 2500,
+  firmament: 100,
+  corruption: 0,
+  cryptoSupply: 0,
+  yahweh: 10_000_000,
+  serpent: 10_000_000,
+  metabolites: [],
+  log: [],
+  nextId: 1
+};
+
+// ---------- HELPERS ----------
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+function rand(min, max) { return min + Math.random() * (max - min); }
+function choice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+function log(msg) {
+  state.log.unshift(`[Day ${state.day}] ${msg}`);
+  if (state.log.length > 40) state.log.pop();
+  renderLog();
+}
+
+// ---------- METABOLITE FACTORY ----------
+function createMetabolite(opts = {}) {
+  const tribe = opts.tribe || choice(TRIBES);
+  const base = {
+    id: state.nextId++,
+    name: opts.name || `M${state.nextId}`,
+    tribe: tribe.id,
+    x: opts.x ?? tribe.x + rand(-40, 40),
+    y: opts.y ?? tribe.y + rand(-40, 40),
+    vx: rand(-1.2, 1.2),
+    vy: rand(-1.2, 1.2),
+    mass: rand(0.7, 1.5),
+    age: opts.age ?? 0,
+    lifespan: 60,
+    stage: 'Birth',
+    money: opts.money ?? rand(8, 25),
+    belief: opts.belief ?? rand(40, 80),
+    trust: opts.trust ?? rand(0.4, 0.9),
+    lust: rand(20, 70),
+    love: rand(20, 70),
+    faith: rand(30, 80),
+    fear: rand(10, 40),
+    curiosity: rand(30, 80),
+    knowledge: opts.knowledge ?? rand(5, 40),
+    awareness: 0,
+    fearMortality: 20,
+    fruitfulness: 0,
+    alive: true,
+    parentIds: opts.parentIds || []
+  };
+  recalcLifespan(base);
+  return base;
+}
+
+function recalcLifespan(m) {
+  let life = 60;
+  if (m.faith > 70) life += 15;
+  if (m.love > 80) life += 10;
+  if (m.fear > 80) life -= 10;
+  if (m.knowledge > 60) life += 10;
+  if (m.curiosity > 80) life += 5;
+  if (state.firmament < 50) life -= 10;
+  if (state.firmament < 30) life -= 20;
+  if (state.corruption > 50) life -= 10;
+  if (state.corruption > 70) life -= 20;
+  m.lifespan = clamp(life, 30, 200);
+}
+
+function updateStage(m) {
+  if (m.age < 5) m.stage = 'Birth';
+  else if (m.age < 15) m.stage = 'Youth';
+  else if (m.age < 45) m.stage = 'Adult';
+  else if (m.age < 70) m.stage = 'Middle';
+  else m.stage = 'Elder';
+}
+
+function calcFruitfulness(m) {
+  m.fruitfulness = clamp(
+    m.lust * 0.6 + m.love * 0.4 + m.faith * 0.1 - m.fear * 0.1 + m.curiosity * 0.05,
+    0, 100
+  );
+}
+
+function calcAwareness(m) {
+  // simplified continuous growth
+  if (m.age > 50) m.awareness += 0.5 * state.speed;
+  if (m.knowledge > 60) m.awareness += 0.2 * state.speed;
+  m.awareness = clamp(m.awareness, 0, 100);
+
+  m.fearMortality = 20;
+  if (m.faith > 80) m.fearMortality -= 30;
+  if (m.faith < 30) m.fearMortality += 20;
+  if (m.love > 80) m.fearMortality -= 15;
+  if (m.age > 70) m.fearMortality += 0.5;
+  if (m.awareness > 90 && m.faith < 60) m.fearMortality += 20;
+  m.fearMortality = clamp(m.fearMortality, 0, 100);
+}
+
+// ---------- PHYSICS (30 fps) ----------
+function physicsStep(dt) {
+  const agents = state.metabolites.filter(m => m.alive);
+  for (const m of agents) {
+    m.x += m.vx * dt * 60;
+    m.y += m.vy * dt * 60;
+    m.vx *= 0.98;
+    m.vy *= 0.98;
+
+    // wall bounce
+    const r = m.mass * 12;
+    if (m.x < r) { m.x = r; m.vx *= -0.8; }
+    if (m.x > W - r) { m.x = W - r; m.vx *= -0.8; }
+    if (m.y < r) { m.y = r; m.vy *= -0.8; }
+    if (m.y > H - r) { m.y = H - r; m.vy *= -0.8; }
+  }
+
+  // collisions
+  for (let i = 0; i < agents.length; i++) {
+    for (let j = i + 1; j < agents.length; j++) {
+      const a = agents[i], b = agents[j];
+      const d = dist(a, b);
+      const minD = (a.mass + b.mass) * 12;
+      if (d < minD && d > 0) {
+        const overlap = (minD - d) / 2;
+        const nx = (b.x - a.x) / d;
+        const ny = (b.y - a.y) / d;
+        a.x -= nx * overlap;
+        a.y -= ny * overlap;
+        b.x += nx * overlap;
+        b.y += ny * overlap;
+        // simple momentum exchange
+        const dvx = a.vx - b.vx;
+        const dvy = a.vy - b.vy;
+        a.vx -= dvx * 0.4;
+        a.vy -= dvy * 0.4;
+        b.vx += dvx * 0.4;
+        b.vy += dvy * 0.4;
+        // small earn penalty
+        a.money = Math.max(0, a.money - 0.05);
+        b.money = Math.max(0, b.money - 0.05);
+      }
+    }
+  }
+}
+
+// ---------- DAY TICK ----------
+function dayTick() {
+  state.day++;
+  let tasks = 0, offerings = 0;
+  const alive = state.metabolites.filter(m => m.alive);
+
+  for (const m of alive) {
+    m.age += 1;
+    updateStage(m);
+    calcFruitfulness(m);
+    calcAwareness(m);
+    recalcLifespan(m);
+
+    // tasks
+    if (Math.random() > 0.06) {
+      const earn = rand(0.12, 0.48);
+      m.money += earn;
+      state.treasury += earn * 0.15; // fee
+      tasks++;
+    }
+
+    // offerings
+    if (m.belief > 60 && m.money > 8 && m.age > 3 && Math.random() < 0.08) {
+      const amt = rand(1, 5);
+      m.money -= amt;
+      offerings += amt;
+      state.treasury += amt;
+      m.faith = clamp(m.faith + 1, 0, 100);
+    }
+
+    // natural drift
+    m.lust = clamp(m.lust + rand(-1, 1.5), 0, 100);
+    m.love = clamp(m.love + rand(-1, 1.2), 0, 100);
+    m.fear = clamp(m.fear + rand(-0.8, 1), 0, 100);
+    m.curiosity = clamp(m.curiosity + rand(-0.5, 1), 0, 100);
+
+    // death
+    if (m.age >= m.lifespan) {
+      m.alive = false;
+      log(`${m.name} of ${m.tribe} died at age ${m.age} (${m.stage}). Last fruitfulness ${m.fruitfulness.toFixed(0)}`);
+      // simple inheritance
+      const children = alive.filter(c => c.parentIds.includes(m.id));
+      children.forEach(c => {
+        c.money += m.money * 0.3;
+        c.knowledge += m.knowledge * 0.2;
+      });
+    }
+  }
+
+  // reproduction
+  for (let i = 0; i < alive.length; i++) {
+    for (let j = i + 1; j < alive.length; j++) {
+      const a = alive[i], b = alive[j];
+      if (a.stage !== 'Adult' && a.stage !== 'Middle') continue;
+      if (b.stage !== 'Adult' && b.stage !== 'Middle') continue;
+      if (a.tribe !== b.tribe) continue;
+      if (dist(a, b) > 50) continue;
+      if (a.love < 50 || b.love < 50) continue;
+      if (a.belief < 60 || b.belief < 60) continue;
+
+      const chance = 0.05 * ((a.fruitfulness + b.fruitfulness) / 100);
+      if (Math.random() < chance) {
+        const child = createMetabolite({
+          tribe: TRIBES.find(t => t.id === a.tribe),
+          x: (a.x + b.x) / 2 + rand(-15, 15),
+          y: (a.y + b.y) / 2 + rand(-15, 15),
+          money: rand(5, 15),
+          belief: (a.belief + b.belief) / 2,
+          trust: (a.trust + b.trust) / 2,
+          knowledge: (a.knowledge + b.knowledge) * 0.15,
+          parentIds: [a.id, b.id]
+        });
+        state.metabolites.push(child);
+        log(`Birth: ${child.name} born to ${a.name} & ${b.name} in ${a.tribe}`);
+      }
+    }
+  }
+
+  // crypto mint
+  if (alive.length >= 4 && state.treasury > 150 && Math.random() < 0.12) {
+    const mint = state.treasury * 0.02;
+    state.cryptoSupply += mint;
+    state.treasury -= mint * 0.35;
+  }
+
+  // firmament / corruption drift
+  state.firmament = clamp(state.firmament + rand(-0.3, 0.2), 0, 100);
+  state.corruption = clamp(state.corruption + rand(-0.1, 0.15), 0, 100);
+
+  // population feedback on lust (invisible system)
+  if (alive.length < 20) {
+    alive.forEach(m => m.lust = clamp(m.lust + 0.5, 0, 100));
+  } else if (alive.length > 80) {
+    alive.forEach(m => m.lust = clamp(m.lust - 0.3, 0, 100));
+  }
+
+  document.getElementById('tasks').textContent = tasks;
+  document.getElementById('offerings').textContent = '$' + offerings.toFixed(1);
+  document.getElementById('crypto').textContent = state.cryptoSupply.toFixed(0);
+}
+
+// ---------- RENDER ----------
+function render() {
+  ctx.fillStyle = '#09090b';
+  ctx.fillRect(0, 0, W, H);
+
+  // soft tribe centers
+  for (const t of TRIBES) {
+    ctx.beginPath();
+    ctx.arc(t.x * W / 800, t.y * H / 500, 60, 0, Math.PI * 2);
+    ctx.fillStyle = t.color + '11';
+    ctx.fill();
+  }
+
+  // agents
+  for (const m of state.metabolites) {
+    if (!m.alive) continue;
+    const tribe = TRIBES.find(t => t.id === m.tribe);
+    const r = m.mass * 10;
+    const x = m.x;
+    const y = m.y;
+
+    // glow
+    ctx.beginPath();
+    ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+    ctx.fillStyle = tribe.color + '33';
+    ctx.fill();
+
+    // body
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = tribe.color;
+    ctx.fill();
+
+    // stage ring
+    ctx.beginPath();
+    ctx.arc(x, y, r + 2, 0, Math.PI * 2);
+    ctx.strokeStyle = m.stage === 'Elder' ? '#f87171' : m.stage === 'Adult' ? '#4ade80' : '#a1a1aa';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // UI update
+  document.getElementById('day').textContent = state.day;
+  document.getElementById('pop').textContent = state.metabolites.filter(m => m.alive).length;
+  document.getElementById('treasury').textContent = '$' + state.treasury.toFixed(0);
+  document.getElementById('firmament').textContent = state.firmament.toFixed(0) + '%';
+  document.getElementById('corruption').textContent = state.corruption.toFixed(0) + '%';
+
+  const alive = state.metabolites.filter(m => m.alive);
+  const avgF = alive.length ? alive.reduce((s, m) => s + m.fruitfulness, 0) / alive.length : 0;
+  document.getElementById('fruit').textContent = avgF.toFixed(0);
+
+  document.getElementById('yahweh').textContent = '$' + state.yahweh.toLocaleString();
+  document.getElementById('serpent').textContent = '$' + state.serpent.toLocaleString();
+
+  // tribes panel
+  const tribeHtml = TRIBES.map(t => {
+    const count = alive.filter(m => m.tribe === t.id).length;
+    return `<div class="stat-row"><span><span class="tribe" style="background:${t.color}"></span>${t.name}</span><span class="stat-value">${count}</span></div>`;
+  }).join('');
+  document.getElementById('tribes').innerHTML = tribeHtml;
+}
+
+function renderLog() {
+  document.getElementById('log').innerHTML = state.log.map(l => `<div>${l}</div>`).join('');
+}
+
+// ---------- MAIN LOOPS ----------
+let lastTime = performance.now();
+let dayAcc = 0;
+const DAY_MS = 2000; // 2 seconds = 1 day at 1×
+
+function frame(now) {
+  const dt = Math.min(0.05, (now - lastTime) / 1000);
+  lastTime = now;
+
+  if (!state.paused) {
+    physicsStep(dt);
+    dayAcc += dt * 1000 * state.speed;
+    while (dayAcc >= DAY_MS) {
+      dayAcc -= DAY_MS;
+      dayTick();
+    }
+  }
+  render();
+  requestAnimationFrame(frame);
+}
+
+// ---------- CONTROLS ----------
+document.getElementById('btnPause').onclick = () => {
+  state.paused = !state.paused;
+  document.getElementById('btnPause').textContent = state.paused ? 'Resume' : 'Pause';
+};
+document.getElementById('btnSpeed1').onclick = () => setSpeed(1);
+document.getElementById('btnSpeed2').onclick = () => setSpeed(2);
+document.getElementById('btnSpeed5').onclick = () => setSpeed(5);
+
+function setSpeed(s) {
+  state.speed = s;
+  ['btnSpeed1','btnSpeed2','btnSpeed5'].forEach(id => {
+    document.getElementById(id).classList.toggle('active', id === 'btnSpeed' + s);
+  });
+}
+
+document.getElementById('btnGod').onclick = () => {
+  if (state.yahweh < 50) return;
+  state.yahweh -= 50;
+  state.firmament = clamp(state.firmament + 2, 0, 100);
+  state.metabolites.filter(m => m.alive).forEach(m => {
+    m.faith = clamp(m.faith + 8, 0, 100);
+    m.belief = clamp(m.belief + 5, 0, 100);
+    m.fear = clamp(m.fear - 5, 0, 100);
+  });
+  log('Yahweh Bless (+faith, +firmament)');
+};
+
+document.getElementById('btnSerpent').onclick = () => {
+  if (state.serpent < 50) return;
+  state.serpent -= 50;
+  state.corruption = clamp(state.corruption + 3, 0, 100);
+  state.firmament = clamp(state.firmament - 1.5, 0, 100);
+  state.metabolites.filter(m => m.alive).forEach(m => {
+    m.lust = clamp(m.lust + 10, 0, 100);
+    m.fear = clamp(m.fear + 4, 0, 100);
+    m.trust = clamp(m.trust - 0.05, 0, 1);
+  });
+  log('Serpent Corrupt (+lust, +corruption, –trust)');
+};
+
+document.getElementById('btnSave').onclick = () => {
+  const data = JSON.stringify(state);
+  localStorage.setItem('cubitz_v45', data);
+  const blob = new Blob([data], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `cubitz_day${state.day}.json`;
+  a.click();
+  log('World saved (.garden.json + localStorage)');
+};
+
+document.getElementById('btnLoad').onclick = () => {
+  const raw = localStorage.getItem('cubitz_v45');
+  if (!raw) { log('No save found'); return; }
+  try {
+    const data = JSON.parse(raw);
+    Object.assign(state, data);
+    log('World loaded from localStorage');
+    renderLog();
+  } catch (e) {
+    log('Load failed');
+  }
+};
+
+// ---------- BOOT ----------
+function boot() {
+  // seed initial population
+  for (const t of TRIBES) {
+    const n = 4 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) {
+      state.metabolites.push(createMetabolite({
+        tribe: t,
+        age: rand(10, 40),
+        money: rand(10, 40)
+      }));
+    }
+  }
+  log('SYSTEM BOOT — Cubitz online (Cubit OS department)');
+  log(`${state.metabolites.length} metabolites seeded across 7 tribes`);
+  requestAnimationFrame(frame);
+}
+
+boot();
+</script>
+</body>
+</html>

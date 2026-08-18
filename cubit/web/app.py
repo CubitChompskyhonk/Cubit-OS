@@ -241,3 +241,20 @@ async def page_commerce_checkout(request: Request):
         return RedirectResponse(f"/commerce?dry_run={session.get('id')}", status_code=303)
     except Exception:
         return RedirectResponse("/commerce?cancelled=1", status_code=303)
+
+
+@app.get("/cubitz", response_class=HTMLResponse)
+def page_cubitz():
+    """Launch Cubitz simulation (full-page)."""
+    html_path = BASE / "static" / "cubitz.html"
+    return HTMLResponse(html_path.read_text(encoding="utf-8"))
+
+
+@app.get("/dept/cubitz", response_class=HTMLResponse)
+def page_dept_cubitz(request: Request):
+    """Department shell that embeds / starts Cubitz."""
+    return templates.TemplateResponse(
+        "cubitz_dept.html",
+        {"request": request, "active": "cubitz"},
+    )
+

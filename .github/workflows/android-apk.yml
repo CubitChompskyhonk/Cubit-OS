@@ -34,7 +34,10 @@ jobs:
           mkdir -p android/app/src/main/python
           rsync -a --exclude '__pycache__' --exclude '*.pyc' --exclude '*_data' --exclude 'data' \
             cubit/ android/app/src/main/python/cubit/
-          # Android uses stdlib server; drop optional web deps references is fine
+          # Cubitz game asset
+          mkdir -p android/app/src/main/python/cubit_static
+          cp -f cubit/web/static/cubitz.html android/app/src/main/python/cubit_static/cubitz.html
+          test -f android/app/src/main/python/cubit_static/cubitz.html
           test -f android/app/src/main/python/cubit_android_server.py
           test -d android/app/src/main/python/cubit
           echo "Bundled files:" && find android/app/src/main/python -type f | wc -l

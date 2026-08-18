@@ -24,6 +24,17 @@ _started = False
 _port = 8765
 
 
+
+def _load_cubitz_html() -> str:
+    candidates = [
+        Path(__file__).resolve().parent / "cubit_static" / "cubitz.html",
+        Path(__file__).resolve().parent / "cubit" / "web" / "static" / "cubitz.html",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c.read_text(encoding="utf-8")
+    return "<html><body style=\"background:#09090b;color:#e4e4e7;font-family:sans-serif;padding:2rem\"><h1>Cubitz</h1><p>Asset missing.</p></body></html>"
+
 def _ensure_cubit_on_path() -> None:
     here = Path(__file__).resolve().parent
     if str(here) not in sys.path:
@@ -248,6 +259,7 @@ def _toolbar(active: str = "") -> str:
   <a class="dept-chip {'active' if active=='projects' else ''}" href="/projects">Projects</a>
   <a class="dept-chip {'active' if active=='tasks' else ''}" href="/tasks">Tasks</a>
   <a class="dept-chip {'active' if active=='commerce' else ''}" href="/dept/commerce">Commerce</a>
+  <a class="dept-chip {'active' if active=='cubitz' else ''}" href="/dept/cubitz">Cubitz</a>
 </div>
 """
 
@@ -724,8 +736,27 @@ def _make_handler():
                 <div class="card"><p class="muted">Checkout via desktop web or API POST /api/v1/commerce/checkout</p></div>"""
             return _shell("Commerce", body, active_dept="commerce", active_nav="chat")
 
+
+        def _page_cubitz_dept(self):
+            body = """
+            <div class="hero">
+              <div class="q">Department · Cubitz</div>
+              <h2>Living garden simulation</h2>
+              <p class="muted" style="margin:0">Tribes, lifecycle, economy pulse, Yahweh / Serpent. Start the world.</p>
+            </div>
+            <div class="card">
+              <p>Cubitz is the simulation department inside Cubit OS.</p>
+              <div class="row" style="margin-top:0.75rem">
+                <a class="btn" href="/cubitz" style="display:inline-block;text-align:center">▶ Start Cubitz</a>
+              </div>
+            </div>
+            """
+            return _shell("Cubitz", body, active_dept="cubitz", active_nav="builder")
+
         def do_GET(self):
             path = urlparse(self.path).path
+            if path == "/cubitz":
+                return self._send(200, _load_cubitz_html())
             if path == "/api/health":
                 return self._json(200, {"status": "ok", "service": "Cubit OS", "version": "0.1.0", "android": True})
             if path == "/api/briefing":

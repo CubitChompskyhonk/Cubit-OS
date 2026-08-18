@@ -23,6 +23,7 @@ class Registry:
                         {"name": "Advisor", "description": "What should we consider?", "status": "active"},
                         {"name": "Historian", "description": "Why did we become this?", "status": "active"},
                         {"name": "Builder", "description": "How do we create?", "status": "active"},
+                        {"name": "Cubitz", "description": "Living garden simulation — start the world", "status": "active"},
                     ]
                 },
             )
