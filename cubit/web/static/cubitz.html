@@ -147,7 +147,7 @@
       <div class="logo-box">C&gt;</div>
       <div>
         <h1>CUBITZ.EXE</h1>
-        <span class="badge">MS-DOS MODE · ECOSYSTEM · SOCIETY</span>
+        <span class="badge">GOD MODE · SLOW LIFE · MS-DOS</span>
       </div>
     </div>
     <div class="controls">
@@ -193,6 +193,9 @@
         <div class="stat-row"><span class="stat-label">Migrations</span><span class="stat-value" id="migrations">0</span></div>
         <div class="stat-row"><span class="stat-label">Complexity</span><span class="stat-value" id="complexity">T1</span></div>
         <div class="stat-row"><span class="stat-label">Fallen nations</span><span class="stat-value" id="fallen">0</span></div>
+        <div class="stat-row"><span class="stat-label">World scale</span><span class="stat-value" id="wscale">1.00</span></div>
+        <div class="stat-row"><span class="stat-label">View zoom</span><span class="stat-value" id="vzoom">1.00</span></div>
+        <div class="stat-row"><span class="stat-label">Watcher</span><span class="stat-value" id="watcher">0</span></div>
       </div>
 
       <div class="panel" id="inspectorPanel">
@@ -264,7 +267,7 @@
   </main>
 
   <footer>
-    <span>C:\CUBIT\CUBITZ.EXE · YEAR TICK · DOS UI · LIVING ECOSYSTEM</span>
+    <span>C:\CUBIT\CUBITZ.EXE · 5s/YEAR · WATCH THE FEW BEFORE THE MANY</span>
     <span id="fps">—</span>
   </footer>
 
@@ -293,7 +296,7 @@ const REGIONS = [
 ];
 
 const GOODS = ['grain', 'ore', 'cloth', 'spice'];
-const YEAR_MS = 2000; // 2s = 1 year at 1×
+const YEAR_MS = 5000; // 5s = 1 year at 1× — contemplative god-game pace
 const MAP_NATIONS = 1, MAP_POP = 2, MAP_BOTH = 3;
 
 const canvas = document.getElementById('canvas');
@@ -359,7 +362,7 @@ const state = {
   diplomacy: initDiplomacy(),
   lastTrades: 0, lastVolume: 0, lastTasks: 0, lastOfferings: 0,
   globalStress: 0,
-  separationYears: 25,
+  separationYears: 40,
   season: 0, // 0 spring 1 summer 2 autumn 3 winter
   weather: 'clear',
   plague: 0,
@@ -376,7 +379,10 @@ const state = {
   complexityTier: 1,
   selectedNationId: null,
   fallenNations: [],
-  lastConquestYear: -99
+  lastConquestYear: -99,
+  worldScale: 1,
+  viewZoom: 1.35,
+  watcherPresence: 0
 };
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
@@ -504,6 +510,8 @@ function createMetabolite(opts = {}) {
     metabolism: rand(0.7, 1.3),
     blessing: null,
     curse: null,
+    watcherFaith: rand(0, 25),
+    legend: '',
     blessingYears: 0,
     curseYears: 0,
     goods,
@@ -595,10 +603,11 @@ function physicsStep(dt) {
     m.vx *= 0.98;
     m.vy *= 0.98;
     const r = m.mass * 11;
-    if (m.x < r) { m.x = r; m.vx *= -0.8; }
-    if (m.x > W - r) { m.x = W - r; m.vx *= -0.8; }
-    if (m.y < r) { m.y = r; m.vy *= -0.8; }
-    if (m.y > H - r) { m.y = H - r; m.vy *= -0.8; }
+    const b = worldBounds();
+    if (m.x < b.minX + r) { m.x = b.minX + r; m.vx *= -0.8; }
+    if (m.x > b.maxX - r) { m.x = b.maxX - r; m.vx *= -0.8; }
+    if (m.y < b.minY + r) { m.y = b.minY + r; m.vy *= -0.8; }
+    if (m.y > b.maxY - r) { m.y = b.maxY - r; m.vy *= -0.8; }
 
     // trail sample
     m.trail.push({ x: m.x, y: m.y });
@@ -1295,7 +1304,7 @@ function yearTick() {
 
   // REPRODUCTION + intermarriage
   let birthsToday = 0;
-  const maxBirths = living.length < 25 ? 6 : living.length < 50 ? 4 : 2;
+  const maxBirths = living.length < 15 ? 1 : living.length < 35 ? 1 : living.length < 60 ? 2 : 1;
   for (let i = 0; i < living.length && birthsToday < maxBirths; i++) {
     for (let j = i + 1; j < living.length && birthsToday < maxBirths; j++) {
       const a = living[i], b = living[j];
@@ -1315,12 +1324,13 @@ function yearTick() {
       const same = a.tribe === b.tribe;
       const rel = relation(a.tribe, b.tribe);
       const pairFruit = (a.fruitfulness + b.fruitfulness) / 200;
-      let chance = 0.11 * (0.35 + pairFruit);
+      let chance = 0.035 * (0.3 + pairFruit); // slow — know individuals before the swarm
       if (!same) chance *= 0.55 + rel / 200; // diplomacy gates mixed births
-      if (living.length < 18) chance *= 2.2;
-      if (living.length < 30) chance *= 1.4;
-      if (living.length > 70) chance *= 0.45;
-      if (living.length > 100) chance *= 0.25;
+      if (living.length < 12) chance *= 1.5;
+      if (living.length > 40) chance *= 0.5;
+      if (living.length > 70) chance *= 0.25;
+      if (living.length > 100) chance *= 0.12;
+      // longer fertility cooldown later handled below
 
       if (Math.random() < chance) {
         const ca = a.color || tribeById(a.tribe).color;
@@ -1346,8 +1356,8 @@ function yearTick() {
           parentIds: [a.id, b.id]
         });
         state.metabolites.push(child);
-        a.fertilityCooldown = 8;
-        b.fertilityCooldown = 8;
+        a.fertilityCooldown = 18;
+        b.fertilityCooldown = 18;
         birthsToday++;
         if (!same) {
           adjustRelation(a.tribe, b.tribe, 2.5);
@@ -1481,8 +1491,19 @@ function drawNationsOver() {
 }
 
 function drawMap() {
-  ctx.fillStyle = '#09090b';
+  ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, W, H);
+  // scale grid hint with world
+  const z = state.viewZoom || 1;
+  ctx.strokeStyle = '#003300';
+  ctx.lineWidth = 1;
+  const step = 40 * (state.worldScale || 1);
+  for (let x = 0; x < W; x += step) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += step) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
   // DOS weather tint (chunky)
   if (state.weather === 'rain') { ctx.fillStyle = 'rgba(85,255,255,0.06)'; ctx.fillRect(0,0,W,H); }
   if (state.weather === 'storm') { ctx.fillStyle = 'rgba(85,85,255,0.1)'; ctx.fillRect(0,0,W,H); }
@@ -1504,13 +1525,17 @@ function drawMap() {
 }
 
 function render() {
+  updateWorldScale();
   drawMap();
+  applyViewTransform();
 
-  // agents on top
+  // agents on top — larger when few (god gazes upon individuals)
+  const popN = state.metabolites.filter(m => m.alive).length;
+  const sizeBoost = clamp(1.35 - popN * 0.008, 0.85, 1.4);
   for (const m of state.metabolites) {
     if (!m.alive) continue;
     const col = m.color || tribeById(m.tribe).color;
-    const r = m.mass * 9;
+    const r = m.mass * 9 * (typeof sizeBoost !== "undefined" ? sizeBoost : 1);
     if (m.stress > 55) {
       ctx.beginPath();
       ctx.arc(m.x, m.y, r + 8, 0, Math.PI * 2);
@@ -1545,6 +1570,8 @@ function render() {
     ctx.stroke();
   }
 
+  endViewTransform();
+
   const alive = state.metabolites.filter(m => m.alive);
   document.getElementById('year').textContent = state.year;
   document.getElementById('pop').textContent = alive.length;
@@ -1577,6 +1604,12 @@ function render() {
   if (cx) cx.textContent = 'T' + (state.complexityTier || 1);
   const fn = document.getElementById('fallen');
   if (fn) fn.textContent = (state.fallenNations || []).length;
+  const ws = document.getElementById('wscale');
+  if (ws) ws.textContent = (state.worldScale || 1).toFixed(2);
+  const vz = document.getElementById('vzoom');
+  if (vz) vz.textContent = (state.viewZoom || 1).toFixed(2);
+  const wp = document.getElementById('watcher');
+  if (wp) wp.textContent = (state.watcherPresence || 0).toFixed(0);
   let allies = 0;
   for (let i = 0; i < TRIBES.length; i++)
     for (let j = i + 1; j < TRIBES.length; j++)
@@ -1611,6 +1644,20 @@ function render() {
   renderNationInspector();
 }
 
+
+function personalityLine(m) {
+  const bits = [];
+  if (m.faith > 70) bits.push('devout');
+  if (m.aggression > 65) bits.push('fierce');
+  if (m.knowledge > 55) bits.push('curious');
+  if (m.love > 70) bits.push('tender');
+  if (m.fear > 60) bits.push('wary');
+  if (m.money > 40) bits.push('prosperous');
+  if ((m.watcherFaith||0) > 50) bits.push('knows the Watcher');
+  if (m.mixed) bits.push('of two bloods');
+  if (!bits.length) bits.push('unremarkable — for now');
+  return bits.join(' · ');
+}
 
 function renderNationInspector() {
   const el = document.getElementById('nationInspector');
@@ -1764,7 +1811,7 @@ function createNewTribe(nameOpt) {
   state.taxRate = state.taxRate || {};
   state.taxRate[id] = tribe.taxRate;
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 3; i++) {
     const opts = {
       tribe, spread: traits.includes('nomadic') ? 40 : 26,
       age: rand(6, 22), money: rand(12, 32) * (traits.includes('mercantile') ? 1.4 : 1),
@@ -1824,8 +1871,12 @@ function renderLog() {
 
 canvas.addEventListener('click', (ev) => {
   const rect = canvas.getBoundingClientRect();
-  const x = (ev.clientX - rect.left) * (canvas.width / rect.width);
-  const y = (ev.clientY - rect.top) * (canvas.height / rect.height);
+  let x = (ev.clientX - rect.left) * (canvas.width / rect.width);
+  let y = (ev.clientY - rect.top) * (canvas.height / rect.height);
+  // inverse view zoom
+  const z = state.viewZoom || 1;
+  x = (x - W / 2) / z + W / 2;
+  y = (y - H / 2) / z + H / 2;
   let hitNation = null, nDist = 22;
   for (const t of TRIBES) {
     const d = Math.hypot(t.x * W - x, t.y * H - y);
@@ -1904,6 +1955,10 @@ document.getElementById('btnGod').onclick = () => {
   });
   state.wars.forEach(w => { w.intensity = clamp(w.intensity - 0.5, 0, 5); });
   for (const a of TRIBES) for (const b of TRIBES) if (a.id < b.id) adjustRelation(a.id, b.id, 2);
+  state.watcherPresence = clamp((state.watcherPresence||0) + 8, 0, 100);
+  state.metabolites.filter(m => m.alive).forEach(m => {
+    m.watcherFaith = clamp((m.watcherFaith||0) + 12, 0, 100);
+  });
   log(`Yahweh Bless All — special: ${BLESSINGS[key].label}`);
 };
 document.getElementById('btnBlessNation').onclick = () => {
@@ -1937,6 +1992,8 @@ document.getElementById('btnBlessOne').onclick = () => {
   state.yahweh -= 25;
   const key = pickBlessing();
   grantBlessing(m, key);
+  state.watcherPresence = clamp((state.watcherPresence||0) + 5, 0, 100);
+  m.watcherFaith = clamp((m.watcherFaith||0) + 25, 0, 100);
   log(`Blessed ${m.name} with ${BLESSINGS[key].label} (${BLESSINGS[key].years}y)`);
   renderInspector();
   renderNationInspector();
@@ -2005,12 +2062,12 @@ function boot() {
   }
   // Tribes separated at first — tight homeland clusters only
   for (const t of TRIBES) {
-    const n = 5 + Math.floor(Math.random() * 3);
+    const n = 2 + Math.floor(Math.random() * 2); // 2–3 — know each face
     for (let i = 0; i < n; i++) {
       state.metabolites.push(createMetabolite({
         tribe: t,
-        spread: 22,
-        age: rand(6, 24),
+        spread: 18,
+        age: rand(8, 20),
         money: rand(12, 35),
         belief: rand(45, 85),
         knowledge: rand(8, 35)
@@ -2020,7 +2077,8 @@ function boot() {
   log('SYSTEM BOOT — Cubitz nations online');
   electLeaders();
   refreshNationSelect(true);
-  log(`Year tick = ${YEAR_MS / 1000}s · tribes separated for ${state.separationYears} years`);
+  log(`Year = ${YEAR_MS / 1000}s · separation ${state.separationYears}y · god-game pace`);
+  log('Know each Cubitz. The world will widen as they multiply.');
   log(`${state.metabolites.length} agents seeded in homeland clusters`);
   requestAnimationFrame(frame);
 }
