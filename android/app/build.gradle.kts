@@ -17,7 +17,6 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            // arm64 for modern devices; x86_64 for emulators
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
     }
@@ -55,14 +54,9 @@ android {
 chaquopy {
     defaultConfig {
         version = "3.11"
+        // Stdlib-only server on Android — no pydantic-core / fastapi wheels required
         pip {
-            // Core Cubit web stack (pure-Python friendly packages)
-            install("fastapi>=0.110.0")
-            install("uvicorn>=0.27.0")
-            install("jinja2>=3.1.0")
-            install("python-multipart>=0.0.9")
-            install("pydantic>=2.0.0")
-            // openai optional; skip heavy native deps for free APK
+            // intentionally empty: pure Python Cubit core + stdlib http.server
         }
     }
 }

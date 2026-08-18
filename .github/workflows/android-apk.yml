@@ -32,14 +32,12 @@ jobs:
       - name: Bundle Cubit Python package into Android sources
         run: |
           mkdir -p android/app/src/main/python
-          rsync -a --exclude '__pycache__' --exclude '*.pyc' --exclude 'data' \
+          rsync -a --exclude '__pycache__' --exclude '*.pyc' --exclude '*_data' --exclude 'data' \
             cubit/ android/app/src/main/python/cubit/
-          # Drop any desktop data dirs; Android uses CUBIT_DATA_ROOT
-          find android/app/src/main/python -type d -name 'data' -exec rm -rf {} + 2>/dev/null || true
+          # Android uses stdlib server; drop optional web deps references is fine
           test -f android/app/src/main/python/cubit_android_server.py
-          test -d android/app/src/main/python/cubit/web
-          echo "Bundled cubit package:"
-          find android/app/src/main/python -type f | head -40
+          test -d android/app/src/main/python/cubit
+          echo "Bundled files:" && find android/app/src/main/python -type f | wc -l
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -54,10 +52,9 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Build debug APK (free — no signing secrets required)
+      - name: Build debug APK (free — no signing secrets)
         working-directory: android
-        run: |
-          gradle :app:assembleDebug --stacktrace --no-daemon
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
 
       - name: Package CubitOS-free.apk
         run: |
@@ -67,8 +64,6 @@ jobs:
           mkdir -p dist
           cp "$APK" dist/CubitOS-free.apk
           ls -lh dist/CubitOS-free.apk
-          # Optional rename for clarity
-          cp dist/CubitOS-free.apk "dist/CubitOS-free-${{ github.sha }}.apk" || true
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -90,8 +85,8 @@ jobs:
 
             - **No wallet, payments, subscriptions, or IAP**
             - Local-first: Kotlin WebView + Chaquopy Python 3.11
-            - Dashboard on `http://127.0.0.1:8765`
-            - Same core as CLI / desktop web
+            - Stdlib HTTP server on `http://127.0.0.1:8765` (no pydantic/fastapi native wheels)
+            - Same core agents, Approval Gate, briefing, chat
 
             ### Install
             1. Download `CubitOS-free.apk`
