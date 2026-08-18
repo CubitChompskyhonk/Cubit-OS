@@ -88,7 +88,7 @@
       <div class="logo-box">CZ</div>
       <div>
         <h1>Cubitz — Nations & Years</h1>
-        <span class="badge">metabolic life · blessings · nations · years</span>
+        <span class="badge">living ecosystem · seasons · forage · plague · migration</span>
       </div>
     </div>
     <div class="controls">
@@ -128,6 +128,10 @@
         <div class="stat-row"><span class="stat-label">Global Stress</span><span class="stat-value" id="stress">0</span></div>
         <div class="stat-row"><span class="stat-label">Active Wars</span><span class="stat-value" id="wars">0</span></div>
         <div class="stat-row"><span class="stat-label">Alliances</span><span class="stat-value" id="alliances">0</span></div>
+        <div class="stat-row"><span class="stat-label">Season</span><span class="stat-value" id="season">—</span></div>
+        <div class="stat-row"><span class="stat-label">Weather</span><span class="stat-value" id="weather">—</span></div>
+        <div class="stat-row"><span class="stat-label">Plague</span><span class="stat-value" id="plague">0</span></div>
+        <div class="stat-row"><span class="stat-label">Migrations</span><span class="stat-value" id="migrations">0</span></div>
       </div>
 
       <div class="panel" id="inspectorPanel">
@@ -143,6 +147,14 @@
       <div class="panel">
         <h3>Nations</h3>
         <div id="tribes"></div>
+      </div>
+
+      <div class="panel" id="tribeCreator">
+        <h3>New Tribe</h3>
+        <input id="newTribeName" type="text" placeholder="Tribe name" maxlength="24"
+          style="width:100%;background:#0f0f14;border:1px solid #3f3f46;color:#e4e4e7;border-radius:8px;padding:8px;margin-bottom:8px"/>
+        <button id="btnFoundTribe" class="god" style="width:100%">Found tribe</button>
+        <p class="hint">Seeds 5 agents on the map and opens diplomacy.</p>
       </div>
 
       <div class="panel">
@@ -263,8 +275,13 @@ const state = {
   diplomacy: initDiplomacy(),
   lastTrades: 0, lastVolume: 0, lastTasks: 0, lastOfferings: 0,
   globalStress: 0,
-  // early-game separation: years before free roaming expands
-  separationYears: 25
+  separationYears: 25,
+  season: 0, // 0 spring 1 summer 2 autumn 3 winter
+  weather: 'clear',
+  plague: 0,
+  forage: {}, // regionId -> biomass
+  migrationPressure: 0,
+  ecosystem: { births: 0, deaths: 0, migrations: 0, infections: 0 }
 };
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
@@ -643,6 +660,85 @@ function yearTick() {
   }
   state.globalStress = alive.length ? stressSum / alive.length : 0;
 
+  // ===== LIVING ECOSYSTEM =====
+  state.season = Math.floor(state.year % 4); // 0 spring … 3 winter
+  const seasonNames = ['Spring', 'Summer', 'Autumn', 'Winter'];
+  const season = state.season;
+  // weather
+  const weatherRoll = Math.random();
+  if (season === 3) state.weather = weatherRoll < 0.35 ? 'storm' : weatherRoll < 0.6 ? 'cold' : 'clear';
+  else if (season === 0) state.weather = weatherRoll < 0.2 ? 'rain' : 'clear';
+  else if (season === 1) state.weather = weatherRoll < 0.15 ? 'drought' : weatherRoll < 0.25 ? 'heat' : 'clear';
+  else state.weather = weatherRoll < 0.25 ? 'rain' : 'clear';
+
+  // region forage regenerates by season/fertility, depleted by foraging
+  for (const r of REGIONS) {
+    let growth = r.fertility * (season === 0 ? 8 : season === 1 ? 5 : season === 2 ? 3 : 0.5);
+    if (state.weather === 'rain') growth *= 1.35;
+    if (state.weather === 'drought' || state.weather === 'cold') growth *= 0.45;
+    if (state.weather === 'storm') growth *= 0.7;
+    state.forage[r.id] = clamp((state.forage[r.id] || 30) + growth, 0, 120);
+  }
+
+  // agents forage / disease / migration drives
+  let ecoBirths = 0, ecoDeaths = 0, ecoMig = 0, ecoInf = 0;
+  for (const m of alive) {
+    const reg = regionAt(m.x, m.y);
+    // forage wild food
+    if (m.hunger > 40 && (state.forage[reg.id] || 0) > 5) {
+      const take = Math.min(8, state.forage[reg.id] * 0.08);
+      state.forage[reg.id] -= take;
+      m.hunger = clamp(m.hunger - take * 1.8, 0, 100);
+      m.energy = clamp(m.energy + take * 1.1, 0, 100);
+    }
+    // seasonal metabolism
+    if (season === 3) { m.energy = clamp(m.energy - 1.5, 0, 100); m.hunger = clamp(m.hunger + 1.2, 0, 100); }
+    if (season === 1 && state.weather === 'heat') m.energy = clamp(m.energy - 1, 0, 100);
+    // plague / disease
+    if (state.plague > 0 || (m.stress > 70 && localDensity(m, 40) > 10 && Math.random() < 0.03)) {
+      if (Math.random() < 0.08 + state.plague * 0.01) {
+        m.energy = clamp(m.energy - 12, 0, 100);
+        m.fear = clamp(m.fear + 6, 0, 100);
+        ecoInf++;
+        if (m.energy < 15 && Math.random() < 0.12) {
+          m.alive = false;
+          ecoDeaths++;
+          log(`${m.name} succumbed to fever in ${reg.name}`);
+        }
+      }
+    }
+    // migration: leave high density / low forage / war
+    const dens = localDensity(m, 50);
+    const lowFood = (state.forage[reg.id] || 0) < 15;
+    if ((dens > 12 || lowFood || m.stress > 75) && m.stage !== 'Birth' && Math.random() < 0.06) {
+      // move toward homeland or richer region
+      let best = reg, bestScore = -1e9;
+      for (const r of REGIONS) {
+        const score = (state.forage[r.id] || 0) * r.fertility - r.hazard * 20;
+        if (score > bestScore) { bestScore = score; best = r; }
+      }
+      m.x = clamp((best.x + best.w * 0.5) * W + rand(-30, 30), 20, W - 20);
+      m.y = clamp((best.y + best.h * 0.5) * H + rand(-30, 30), 20, H - 20);
+      m.trail = [];
+      ecoMig++;
+      m.stress = clamp(m.stress - 5, 0, 100);
+    }
+  }
+  // plague rise/fall
+  if (alive.length > 90 && state.globalStress > 50 && Math.random() < 0.04) {
+    state.plague = clamp(state.plague + 2, 0, 20);
+    if (state.plague === 2) log('Fever spreads among the nations');
+  } else {
+    state.plague = clamp(state.plague - 0.4, 0, 20);
+  }
+  state.migrationPressure = ecoMig;
+  state.ecosystem = { births: ecoBirths, deaths: ecoDeaths, migrations: ecoMig, infections: ecoInf };
+
+  // weather effect on firmament/corruption
+  if (state.weather === 'storm') state.firmament = clamp(state.firmament - 0.3, 20, 100);
+  if (state.weather === 'rain') state.firmament = clamp(state.firmament + 0.2, 20, 100);
+
+
   // --- Dynamic diplomacy ---
   const tribeIds = TRIBES.map(t => t.id);
   for (let i = 0; i < tribeIds.length; i++) {
@@ -966,6 +1062,11 @@ function drawNationsOver() {
 function drawMap() {
   ctx.fillStyle = '#09090b';
   ctx.fillRect(0, 0, W, H);
+  // weather tint
+  if (state.weather === 'rain') { ctx.fillStyle = 'rgba(56,189,248,0.05)'; ctx.fillRect(0,0,W,H); }
+  if (state.weather === 'storm') { ctx.fillStyle = 'rgba(30,30,60,0.12)'; ctx.fillRect(0,0,W,H); }
+  if (state.weather === 'heat' || state.weather === 'drought') { ctx.fillStyle = 'rgba(251,146,60,0.06)'; ctx.fillRect(0,0,W,H); }
+  if (state.weather === 'cold') { ctx.fillStyle = 'rgba(186,230,253,0.06)'; ctx.fillRect(0,0,W,H); }
 
   // subtle region underlay
   for (const r of REGIONS) {
@@ -1032,6 +1133,15 @@ function render() {
   document.getElementById('corruption').textContent = state.corruption.toFixed(0) + '%';
   document.getElementById('stress').textContent = state.globalStress.toFixed(0);
   document.getElementById('wars').textContent = state.wars.length;
+  const seasonNames = ['Spring','Summer','Autumn','Winter'];
+  const se = document.getElementById('season');
+  if (se) se.textContent = seasonNames[state.season] || '—';
+  const we = document.getElementById('weather');
+  if (we) we.textContent = state.weather || '—';
+  const pl = document.getElementById('plague');
+  if (pl) pl.textContent = (state.plague || 0).toFixed(1);
+  const mg = document.getElementById('migrations');
+  if (mg) mg.textContent = (state.ecosystem && state.ecosystem.migrations) || 0;
   let allies = 0;
   for (let i = 0; i < TRIBES.length; i++)
     for (let j = i + 1; j < TRIBES.length; j++)
@@ -1062,7 +1172,6 @@ function render() {
   dip += '</table>';
   document.getElementById('diplomacy').innerHTML = dip;
 
-  refreshNationSelect();
   renderInspector();
 }
 
@@ -1110,43 +1219,66 @@ function renderInspector() {
   `;
 }
 
-function refreshNationSelect() {
+let _nationSelectSig = '';
+function refreshNationSelect(force) {
   const sel = document.getElementById('nationTarget');
   if (!sel) return;
+  const sig = TRIBES.map(t => t.id).join('|');
+  if (!force && sig === _nationSelectSig && sel.options.length > 1) return;
+  _nationSelectSig = sig;
   const cur = sel.value;
+  const open = document.activeElement === sel;
+  if (open && !force) return; // never rebuild while user is choosing
   sel.innerHTML = '<option value="">Nation: All</option>' + TRIBES.map(t =>
-    `<option value="${t.id}" ${cur===t.id?'selected':''}>${t.name}</option>`
+    `<option value="${t.id}">${t.name}</option>`
   ).join('');
+  if (cur && TRIBES.some(t => t.id === cur)) sel.value = cur;
 }
 
-function createNewTribe() {
-  const name = prompt('New tribe name (e.g. Moab)');
-  if (!name || !name.trim()) return;
-  let id = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-  if (!id) id = 'tribe_' + state.nextId;
-  if (TRIBES.some(t => t.id === id)) { log('Tribe id exists: ' + id); return; }
-  // pick free-ish map position
-  const x = 0.15 + Math.random() * 0.7;
-  const y = 0.15 + Math.random() * 0.7;
-  const color = '#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0');
-  const tribe = { id, name: name.trim(), color, x, y };
-  TRIBES.push(tribe);
-  // seed small population
-  for (let i = 0; i < 4; i++) {
-    state.metabolites.push(createMetabolite({
-      tribe, spread: 24, age: rand(8, 22), money: rand(10, 30), belief: rand(45, 80)
-    }));
+function createNewTribe(nameOpt) {
+  const input = document.getElementById('newTribeName');
+  const name = (nameOpt != null ? nameOpt : (input ? input.value : '')).trim();
+  if (!name) {
+    log('Enter a tribe name in the New Tribe panel, then Found tribe');
+    const panel = document.getElementById('tribeCreator');
+    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (input) input.focus();
+    return;
   }
-  // diplomacy defaults vs others
+  let id = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  if (!id) id = 'tribe_' + state.nextId;
+  if (TRIBES.some(t => t.id === id || t.name.toLowerCase() === name.toLowerCase())) {
+    log('Tribe already exists: ' + name);
+    return;
+  }
+  const x = 0.12 + Math.random() * 0.76;
+  const y = 0.12 + Math.random() * 0.76;
+  const hues = ['#f472b6','#c084fc','#22d3ee','#a3e635','#fb923c','#e879f9','#2dd4bf','#fbbf24'];
+  const color = hues[TRIBES.length % hues.length];
+  const tribe = { id, name, color, x, y };
+  TRIBES.push(tribe);
+  if (!state.diplomacy) state.diplomacy = {};
   if (!state.diplomacy[id]) state.diplomacy[id] = {};
   for (const o of TRIBES) {
-    if (o.id === id) continue;
     if (!state.diplomacy[o.id]) state.diplomacy[o.id] = {};
-    setRelation(id, o.id, 0);
+    if (o.id === id) {
+      state.diplomacy[id][id] = 100;
+      continue;
+    }
+    state.diplomacy[id][o.id] = 0;
+    state.diplomacy[o.id][id] = 0;
+  }
+  for (let i = 0; i < 5; i++) {
+    state.metabolites.push(createMetabolite({
+      tribe, spread: 26, age: rand(6, 22), money: rand(12, 32), belief: rand(45, 85)
+    }));
   }
   rebuildNationGrid();
-  refreshNationSelect();
-  log('New tribe founded: ' + tribe.name + ' (' + id + ')');
+  refreshNationSelect(true);
+  if (input) input.value = '';
+  log('New tribe founded: ' + tribe.name + ' · ' + color);
+  const sel = document.getElementById('nationTarget');
+  if (sel) sel.value = id;
 }
 
 function grantToNation(nationId, kind) {
@@ -1255,7 +1387,24 @@ document.getElementById('btnBlessNation').onclick = () => {
 document.getElementById('btnCurseNation').onclick = () => {
   grantToNation(document.getElementById('nationTarget').value, 'curse');
 };
-document.getElementById('btnNewTribe').onclick = () => createNewTribe();
+document.getElementById('btnNewTribe').onclick = () => {
+  const panel = document.getElementById('tribeCreator');
+  const input = document.getElementById('newTribeName');
+  if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  if (input) { input.focus(); if (input.value.trim()) createNewTribe(); }
+};
+document.getElementById('btnFoundTribe').onclick = () => createNewTribe();
+document.getElementById('newTribeName').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') createNewTribe();
+});
+// Keep nation select stable while interacting
+(function(){
+  const sel = document.getElementById('nationTarget');
+  if (!sel) return;
+  sel.addEventListener('mousedown', (e) => e.stopPropagation());
+  sel.addEventListener('click', (e) => e.stopPropagation());
+  sel.addEventListener('change', () => { /* keep value */ });
+})();
 document.getElementById('btnBlessOne').onclick = () => {
   const m = state.metabolites.find(x => x.id === state.selectedId && x.alive);
   if (!m) { log('Select a Cubitz first (click on map)'); return; }
@@ -1315,6 +1464,7 @@ document.getElementById('btnLoad').onclick = () => {
 function boot() {
   resize();
   rebuildNationGrid();
+  for (const r of REGIONS) state.forage[r.id] = 40 + r.fertility * 40;
   // Tribes separated at first — tight homeland clusters only
   for (const t of TRIBES) {
     const n = 5 + Math.floor(Math.random() * 3);
@@ -1330,7 +1480,7 @@ function boot() {
     }
   }
   log('SYSTEM BOOT — Cubitz nations online');
-  refreshNationSelect();
+  refreshNationSelect(true);
   log(`Year tick = ${YEAR_MS / 1000}s · tribes separated for ${state.separationYears} years`);
   log(`${state.metabolites.length} agents seeded in homeland clusters`);
   requestAnimationFrame(frame);

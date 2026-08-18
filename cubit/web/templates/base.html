@@ -45,17 +45,41 @@
   (function(){
     const s = document.getElementById('cubit-splash');
     const a = document.getElementById('boot-audio');
-    function go(){ if(s){ s.classList.add('hide'); setTimeout(function(){ if(s&&s.parentNode)s.remove(); },700);} }
-    if (sessionStorage.getItem('cubit_booted')) { go(); return; }
-    sessionStorage.setItem('cubit_booted','1');
-    try {
-      if (a) {
-        a.volume = 0.85;
-        var p = a.play();
-        if (p && p.then) p.then(function(){ setTimeout(go, Math.min(16000, ((a.duration||4)*1000))); }).catch(function(){ setTimeout(go, 1800); });
-        else setTimeout(go, 1800);
-      } else setTimeout(go, 1200);
-    } catch(e) { setTimeout(go, 1200); }
+    let done = false;
+    function go(){
+      if (done) return;
+      done = true;
+      if(s){ s.classList.add('hide'); setTimeout(function(){ if(s&&s.parentNode)s.remove(); },700); }
+    }
+    function startAudio(){
+      if (!a) { setTimeout(go, 800); return; }
+      a.volume = 0.9;
+      a.onended = function(){ go(); };
+      a.onerror = function(){ setTimeout(go, 600); };
+      var p = a.play();
+      if (p && p.then) {
+        p.then(function(){
+          // hard cap if duration metadata missing
+          setTimeout(function(){ if(!done) go(); }, 20000);
+        }).catch(function(){
+          // autoplay blocked — require tap
+          var tip = document.createElement('p');
+          tip.style.cssText = 'color:#fcd34d;margin-top:1rem;cursor:pointer;font-size:0.9rem';
+          tip.textContent = 'Tap to begin';
+          if(s) s.appendChild(tip);
+          function unlock(){
+            a.play().then(function(){}).catch(function(){ go(); });
+            document.body.removeEventListener('click', unlock);
+            document.body.removeEventListener('touchstart', unlock);
+          }
+          document.body.addEventListener('click', unlock, {once:true});
+          document.body.addEventListener('touchstart', unlock, {once:true});
+        });
+      } else {
+        setTimeout(go, 2000);
+      }
+    }
+    startAudio();
   })();
   </script>
   <div class="layout-header">
