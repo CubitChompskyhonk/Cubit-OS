@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CUBITS.EXE — Save the Cubits</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#000;--panel:#0000aa;--text:#aaaaaa;--bright:#fff;
+  --green:#55ff55;--yellow:#ffff55;--cyan:#55ffff;--red:#ff5555;--magenta:#ff55ff;--dim:#555;
+}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:"Courier New",Courier,monospace;font-size:13px;
+  min-height:100vh;display:flex;flex-direction:column;image-rendering:pixelated;
+}
+header{
+  background:var(--panel);border-bottom:2px solid var(--cyan);
+  padding:6px 10px;display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:8px;position:sticky;top:0;z-index:50;
+}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-box{
+  width:28px;height:28px;background:var(--yellow);color:#000;font-weight:900;font-size:11px;
+  display:flex;align-items:center;justify-content:center;border:2px solid var(--bright);
+}
+h1{font-size:14px;font-weight:700;color:var(--yellow);letter-spacing:.04em}
+.badge{font-size:10px;color:var(--cyan);border:1px solid var(--dim);padding:1px 6px}
+.controls{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+button{
+  background:#000;border:1px solid var(--text);color:var(--bright);
+  padding:4px 8px;font-family:inherit;font-size:12px;cursor:pointer;border-radius:0;
+}
+button:hover,button:focus{background:var(--panel);color:var(--yellow);border-color:var(--yellow)}
+button.active{background:var(--green);color:#000;border-color:var(--green)}
+button:disabled{opacity:.4;cursor:default}
+main{display:flex;flex:1;overflow:hidden;min-height:0}
+#stage{
+  flex:1;background:#000;position:relative;min-width:0;
+  border-right:2px solid var(--cyan);display:flex;align-items:center;justify-content:center;
+}
+canvas{display:block;image-rendering:pixelated;cursor:crosshair;max-width:100%;max-height:100%}
+aside{
+  width:min(300px,42vw);background:#000;border-left:2px solid var(--dim);
+  overflow-y:auto;padding:8px;
+}
+@media(max-width:720px){
+  main{flex-direction:column}
+  aside{width:100%;max-height:38vh;border-left:none;border-top:2px solid var(--cyan)}
+}
+.panel{background:#000;border:1px solid var(--text);padding:8px;margin-bottom:8px}
+.panel h3{
+  font-size:11px;color:var(--yellow);margin-bottom:6px;text-transform:uppercase;
+  letter-spacing:.08em;border-bottom:1px solid var(--dim);padding-bottom:3px;
+}
+.stat-row{display:flex;justify-content:space-between;margin:2px 0;gap:8px}
+.stat-label{color:var(--text)}.stat-value{color:var(--green);font-weight:700}
+.skill-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.skill-btn{
+  text-align:left;padding:6px;border:1px solid var(--dim);background:#000;color:var(--bright);
+  font-family:inherit;font-size:11px;cursor:pointer;
+}
+.skill-btn.active{border-color:var(--yellow);color:var(--yellow);background:#001133}
+.skill-btn .count{color:var(--cyan);float:right}
+.hint{color:var(--dim);font-size:11px;margin-top:4px;line-height:1.35}
+.log{max-height:100px;overflow-y:auto;font-size:11px;color:var(--cyan);line-height:1.3}
+footer{
+  border-top:2px solid var(--panel);background:var(--panel);padding:4px 10px;
+  font-size:11px;color:var(--yellow);display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;
+}
+.overlay{
+  position:absolute;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;
+  z-index:20;flex-direction:column;gap:10px;text-align:center;padding:16px;
+}
+.overlay h2{color:var(--yellow);font-size:18px}
+.overlay p{color:var(--cyan);max-width:360px}
+.overlay.hidden{display:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-box">C&gt;</div>
+    <div>
+      <h1>CUBITS.EXE</h1>
+      <span class="badge">MS-DOS · save the cubits · lemmings-inspired</span>
+    </div>
+  </div>
+  <div class="controls">
+    <button id="btnPause">Pause</button>
+    <button id="btnSpeed1" class="active">1×</button>
+    <button id="btnSpeed2">2×</button>
+    <button id="btnRestart">Restart</button>
+    <button id="btnNext">Next Level</button>
+  </div>
+</header>
+<main>
+  <div id="stage">
+    <canvas id="canvas" width="640" height="320"></canvas>
+    <div class="overlay" id="overlay">
+      <h2 id="ovTitle">CUBITS.EXE</h2>
+      <p id="ovMsg">Guide the cubits to the exit. Assign skills. Save the quota.</p>
+      <button id="btnStart">START LEVEL</button>
+    </div>
+  </div>
+  <aside>
+    <div class="panel">
+      <h3>Level Status</h3>
+      <div class="stat-row"><span class="stat-label">Level</span><span class="stat-value" id="lvl">1</span></div>
+      <div class="stat-row"><span class="stat-label">Time</span><span class="stat-value" id="time">—</span></div>
+      <div class="stat-row"><span class="stat-label">Out</span><span class="stat-value" id="out">0</span></div>
+      <div class="stat-row"><span class="stat-label">Saved</span><span class="stat-value" id="saved">0</span></div>
+      <div class="stat-row"><span class="stat-label">Need</span><span class="stat-value" id="need">0</span></div>
+      <div class="stat-row"><span class="stat-label">Dead</span><span class="stat-value" id="dead">0</span></div>
+    </div>
+    <div class="panel">
+      <h3>Skills</h3>
+      <div class="skill-grid" id="skills"></div>
+      <p class="hint">Click a skill, then click a cubit. Blockers turn walkers. Builders make stairs. Diggers go down. Bashers go sideways. Floaters survive falls. Climbers scale walls. Bombers clear a path.</p>
+    </div>
+    <div class="panel">
+      <h3>Level Select</h3>
+      <div class="controls" id="levelBtns"></div>
+    </div>
+    <div class="panel">
+      <h3>Log</h3>
+      <div class="log" id="log"></div>
+    </div>
+  </aside>
+</main>
+<footer>
+  <span>C:\CUBIT\CUBITS.EXE · INSPIRED BY LEMMINGS · DOS MODE</span>
+  <span id="fps">—</span>
+</footer>
+<script>
+// ============================================================
+// CUBITS.EXE — MS-DOS Lemmings-inspired puzzle
+// ============================================================
+const TILE = 8;
+const COLS = 80;
+const ROWS = 40;
+const W = COLS * TILE;
+const H = ROWS * TILE;
+
+const SKILLS = [
+  { id: 'climber', name: 'CLIMBER', key: 'C' },
+  { id: 'floater', name: 'FLOATER', key: 'F' },
+  { id: 'bomber', name: 'BOMBER', key: 'B' },
+  { id: 'blocker', name: 'BLOCKER', key: 'X' },
+  { id: 'builder', name: 'BUILDER', key: 'U' },
+  { id: 'basher', name: 'BASHER', key: 'H' },
+  { id: 'digger', name: 'DIGGER', key: 'D' },
+];
+
+// Tile types: 0 empty, 1 solid, 2 steel, 3 entrance, 4 exit, 5 water/hazard
+const LEVELS = [
+  {
+    name: 'JUST DIG',
+    time: 180, release: 10, rate: 40, need: 5,
+    skills: { climber:0, floater:0, bomber:0, blocker:0, builder:0, basher:0, digger:10 },
+    map: `
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+....................................E...........................................
+................................................................................
+................................................................................
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+..............................................X.................................
+................................................................................
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX............
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS............
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS............
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS............
+`
+  },
+  {
+    name: 'BRIDGE BUILDERS',
+    time: 200, release: 12, rate: 50, need: 6,
+    skills: { climber:0, floater:2, bomber:0, blocker:2, builder:12, basher:0, digger:2 },
+    map: `
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................E...............................................................
+................................................................................
+................XXXXXXXXXXXX....................................................
+................XXXXXXXXXXXX....................................................
+................XXXXXXXXXXXX....................................................
+................XXXXXXXXXXXX.......................X............................
+................XXXXXXXXXXXX....................................................
+................XXXXXXXXXXXX..............XXXXXXXXXXXXXXXXXXXXXXXX..............
+................XXXXXXXXXXXX..............XXXXXXXXXXXXXXXXXXXXXXXX..............
+..........................................XXXXXXXXXXXXXXXXXXXXXXXX..............
+..........................................XXXXXXXXXXXXXXXXXXXXXXXX..............
+..........................................XXXXXXXXXXXXXXXXXXXXXXXX..............
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS......
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS......
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS......
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS......
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS......
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS......
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS......
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS......
+`
+  },
+  {
+    name: 'THE GAUNTLET',
+    time: 240, release: 16, rate: 45, need: 8,
+    skills: { climber:4, floater:4, bomber:2, blocker:3, builder:8, basher:4, digger:4 },
+    map: `
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................E...............................................X...............
+................................................................................
+................XXXXXXXX......XXXXXXXX......XXXXXXXX......XXXXXXXX..............
+................XXXXXXXX......XXXXXXXX......XXXXXXXX......XXXXXXXX..............
+................XXXXXXXX......XXXXXXXX......XXXXXXXX......XXXXXXXX..............
+................XXXXXXXX......XXXXXXXX......XXXXXXXX......XXXXXXXX..............
+................XXXXXXXX......XXXXXXXX......XXXXXXXX......XXXXXXXX..............
+................XXXXXXXXWWWWWWXXXXXXXXWWWWWWXXXXXXXXWWWWWWXXXXXXXX..............
+................XXXXXXXXWWWWWWXXXXXXXXWWWWWWXXXXXXXXWWWWWWXXXXXXXX..............
+................XXXXXXXXWWWWWWXXXXXXXXWWWWWWXXXXXXXXWWWWWWXXXXXXXX..............
+................XXXXXXXXWWWWWWXXXXXXXXWWWWWWXXXXXXXXWWWWWWXXXXXXXX..............
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..............
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..............
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..............
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+`
+  },
+  {
+    name: 'STEEL CITADEL',
+    time: 300, release: 20, rate: 35, need: 10,
+    skills: { climber:6, floater:4, bomber:6, blocker:4, builder:10, basher:6, digger:6 },
+    map: `
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................E...............................................................
+................................................................................
+................SSSSSSSSSSSSSS..................................................
+................SSSSSSSSSSSSSS..................................................
+................SS............SS................................................
+................SS............SS................................................
+................SS....XXXX....SS.......................X........................
+................SS....XXXX....SS................................................
+................SS............SS..............SSSSSSSSSSSSSSSS..................
+................SS............SS..............SSSSSSSSSSSSSSSS..................
+................SSSSSSSSSSSSSSSS..............SS............SS..................
+................SSSSSSSSSSSSSSSS..............SS............SS..................
+..............................................SS....XXXX....SS..................
+..............................................SS....XXXX....SS..................
+................XXXXXXXXXXXXXXXX..............SS............SS..................
+................XXXXXXXXXXXXXXXX..............SS............SS..................
+................XXXXXXXXXXXXXXXX..............SSSSSSSSSSSSSSSS..................
+................XXXXXXXXXXXXXXXX..............SSSSSSSSSSSSSSSS..................
+................................................................................
+................................................................................
+................WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW..............
+................WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW..............
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..............
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..............
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..............
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+................................................................................
+`
+  },
+];
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = W; canvas.height = H;
+
+const state = {
+  levelIdx: 0,
+  tiles: [],
+  cubits: [],
+  entrance: null,
+  exit: null,
+  skills: {},
+  selectedSkill: null,
+  released: 0,
+  saved: 0,
+  dead: 0,
+  timeLeft: 0,
+  releaseTimer: 0,
+  releaseRate: 50,
+  totalToRelease: 10,
+  need: 5,
+  paused: true,
+  speed: 1,
+  running: false,
+  won: false,
+  lost: false,
+  log: [],
+  nextId: 1,
+};
+
+function log(msg) {
+  state.log.unshift(msg);
+  if (state.log.length > 30) state.log.pop();
+  document.getElementById('log').innerHTML = state.log.map(l => `<div>${l}</div>`).join('');
+}
+
+function parseMap(raw) {
+  const lines = raw.trim().split('\n').map(l => l.trimEnd());
+  while (lines.length < ROWS) lines.push('.'.repeat(COLS));
+  const tiles = [];
+  let entrance = null, exit = null;
+  for (let y = 0; y < ROWS; y++) {
+    const row = [];
+    const line = (lines[y] || '').padEnd(COLS, '.').slice(0, COLS);
+    for (let x = 0; x < COLS; x++) {
+      const ch = line[x] || '.';
+      let t = 0;
+      if (ch === 'X') t = 1;
+      else if (ch === 'S') t = 2;
+      else if (ch === 'W') t = 5;
+      else if (ch === 'E') { t = 0; entrance = { x, y }; }
+      else if (ch === 'x' || ch === 'O') { t = 0; exit = { x, y }; }
+      // treat capital X as solid; exit marker as lowercase x in map - we used X for exit in level data as single X near end
+      row.push(t);
+    }
+    tiles.push(row);
+  }
+  // Find exit: look for standalone X that we marked - actually maps use X for exit as single letter in open space
+  // Re-parse for exit: character 'X' alone on platform is wrong. Levels use 'X' for exit in open air.
+  // Fix: second pass - in level strings exit is 'X' not on solid. We'll scan original for exit char.
+  for (let y = 0; y < ROWS; y++) {
+    const line = (lines[y] || '').padEnd(COLS, '.').slice(0, COLS);
+    for (let x = 0; x < COLS; x++) {
+      if (line[x] === 'X' && (tiles[y][x] === 0 || true)) {
+        // distinguish: if surrounded mostly by empty and near platform, could be exit
+      }
+    }
+  }
+  return { tiles, entrance, exit };
+}
+
+// Better parse: E entrance, O exit, # or X dirt, S steel, W water, . empty
+function parseMap2(raw) {
+  const lines = raw.trim().split('\n');
+  while (lines.length < ROWS) lines.push('.'.repeat(COLS));
+  const tiles = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+  let entrance = null, exit = null;
+  for (let y = 0; y < ROWS; y++) {
+    const line = (lines[y] || '').padEnd(COLS, ' ');
+    for (let x = 0; x < COLS; x++) {
+      const ch = line[x];
+      if (ch === 'X' || ch === '#') tiles[y][x] = 1;
+      else if (ch === 'S') tiles[y][x] = 2;
+      else if (ch === 'W') tiles[y][x] = 5;
+      else if (ch === 'E') { tiles[y][x] = 0; entrance = { x, y }; }
+      else if (ch === 'O') { tiles[y][x] = 0; exit = { x, y }; }
+      else tiles[y][x] = 0;
+    }
+  }
+  return { tiles, entrance, exit };
+}
+
+// Convert level maps: exit marker was 'X' in open - change parser to treat lone exit
+// We'll rewrite maps to use O for exit
+function convertLevelMaps() {
+  for (const L of LEVELS) {
+    // Replace exit: the X that is not part of a solid block - in our maps exit is single X
+    // Simpler: in each map string, the exit is the X that appears after long empty - use O
+    L.map = L.map.replace(/(\.{10,})X(\.{10,})/g, '$1O$2');
+    // Also handle X at end of sparse lines
+    L.map = L.map.split('\n').map(line => {
+      // if line has few X and one isolated
+      if ((line.match(/X/g) || []).length === 1 && !line.includes('XX')) {
+        return line.replace('X', 'O');
+      }
+      return line;
+    }).join('\n');
+  }
+}
+convertLevelMaps();
+
+function solid(x, y) {
+  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return true;
+  const t = state.tiles[y][x];
+  return t === 1 || t === 2;
+}
+function steel(x, y) {
+  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return false;
+  return state.tiles[y][x] === 2;
+}
+function hazard(x, y) {
+  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return false;
+  return state.tiles[y][x] === 5;
+}
+function empty(x, y) {
+  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return false;
+  return state.tiles[y][x] === 0;
+}
+
+function spawnCubit() {
+  if (!state.entrance || state.released >= state.totalToRelease) return;
+  const e = state.entrance;
+  state.cubits.push({
+    id: state.nextId++,
+    x: e.x * TILE + TILE / 2,
+    y: e.y * TILE,
+    vx: 0.6,
+    vy: 0,
+    dir: 1,
+    state: 'fall',
+    fallDist: 0,
+    climber: false,
+    floater: false,
+    action: null,
+    actionTimer: 0,
+    buildLeft: 0,
+    bombTimer: -1,
+    alive: true,
+    saved: false,
+  });
+  state.released++;
+}
+
+function tileAtPixel(px, py) {
+  return { tx: Math.floor(px / TILE), ty: Math.floor(py / TILE) };
+}
+
+function cubitFeet(c) {
+  return { x: c.x, y: c.y + 6 };
+}
+
+function updateCubit(c) {
+  if (!c.alive || c.saved) return;
+
+  // bomb countdown
+  if (c.bombTimer >= 0) {
+    c.bombTimer--;
+    if (c.bombTimer === 0) {
+      explode(c);
+      return;
+    }
+  }
+
+  if (c.action === 'blocker') {
+    // stay put, block others
+    return;
+  }
+
+  if (c.action === 'builder') {
+    c.actionTimer++;
+    if (c.actionTimer % 8 === 0 && c.buildLeft > 0) {
+      const tx = Math.floor((c.x + c.dir * 6) / TILE);
+      const ty = Math.floor((c.y + 4) / TILE);
+      if (tx >= 0 && tx < COLS && ty >= 0 && ty < ROWS && state.tiles[ty][tx] === 0) {
+        state.tiles[ty][tx] = 1;
+      }
+      c.x += c.dir * 2;
+      c.y -= 2;
+      c.buildLeft--;
+    }
+    if (c.buildLeft <= 0) {
+      c.action = null;
+      c.state = 'walk';
+    }
+    // still subject to gravity if no floor
+    const feet = tileAtPixel(c.x, c.y + 7);
+    if (!solid(feet.tx, feet.ty) && !solid(feet.tx, feet.ty + 0)) {
+      // check below
+    }
+    const below = tileAtPixel(c.x, c.y + 8);
+    if (!solid(below.tx, below.ty)) {
+      c.action = null;
+      c.state = 'fall';
+      c.vy = 0;
+    }
+    return;
+  }
+
+  if (c.action === 'digger') {
+    c.actionTimer++;
+    if (c.actionTimer % 6 === 0) {
+      const tx = Math.floor(c.x / TILE);
+      const ty = Math.floor((c.y + 8) / TILE);
+      if (ty < ROWS && tx >= 0 && tx < COLS) {
+        if (steel(tx, ty)) { c.action = null; c.state = 'walk'; return; }
+        if (solid(tx, ty)) {
+          state.tiles[ty][tx] = 0;
+          c.y += 2;
+        } else {
+          c.action = null;
+          c.state = 'fall';
+        }
+      }
+    }
+    return;
+  }
+
+  if (c.action === 'basher') {
+    c.actionTimer++;
+    if (c.actionTimer % 5 === 0) {
+      const tx = Math.floor((c.x + c.dir * 8) / TILE);
+      const ty = Math.floor((c.y + 2) / TILE);
+      if (tx >= 0 && tx < COLS && ty >= 0 && ty < ROWS) {
+        if (steel(tx, ty)) { c.action = null; c.state = 'walk'; return; }
+        if (solid(tx, ty)) {
+          state.tiles[ty][tx] = 0;
+          if (ty > 0) state.tiles[ty - 1][tx] = 0;
+        } else {
+          c.actionTimer++;
+          if (c.actionTimer > 40) { c.action = null; c.state = 'walk'; }
+        }
+      }
+      c.x += c.dir * 1.5;
+    }
+    // need floor
+    const below = tileAtPixel(c.x, c.y + 8);
+    if (!solid(below.tx, below.ty)) {
+      c.action = null;
+      c.state = 'fall';
+    }
+    return;
+  }
+
+  // physics
+  const feet = tileAtPixel(c.x, c.y + 7);
+  const onGround = solid(feet.tx, feet.ty);
+
+  if (!onGround) {
+    if (c.state !== 'float') c.state = 'fall';
+    if (c.floater && c.fallDist > 16) {
+      c.state = 'float';
+      c.vy = Math.min(c.vy + 0.05, 0.8);
+    } else {
+      c.vy = Math.min(c.vy + 0.25, 4);
+    }
+    c.y += c.vy;
+    c.fallDist += c.vy;
+    // land
+    const f2 = tileAtPixel(c.x, c.y + 7);
+    if (solid(f2.tx, f2.ty)) {
+      c.y = f2.ty * TILE - 7;
+      if (!c.floater && c.fallDist > 48) {
+        kill(c, 'splat');
+        return;
+      }
+      c.vy = 0;
+      c.fallDist = 0;
+      c.state = 'walk';
+    }
+    if (hazard(Math.floor(c.x / TILE), Math.floor((c.y + 4) / TILE))) {
+      kill(c, 'drown');
+      return;
+    }
+    return;
+  }
+
+  // walking / climbing
+  c.state = 'walk';
+  c.vy = 0;
+  c.fallDist = 0;
+
+  // blockers turn
+  for (const o of state.cubits) {
+    if (o === c || !o.alive || o.action !== 'blocker') continue;
+    if (Math.abs(o.x - c.x) < 6 && Math.abs(o.y - c.y) < 8) {
+      if ((c.dir > 0 && c.x < o.x) || (c.dir < 0 && c.x > o.x)) {
+        c.dir *= -1;
+        c.x += c.dir * 2;
+      }
+    }
+  }
+
+  const aheadX = c.x + c.dir * 4;
+  const aheadT = tileAtPixel(aheadX, c.y + 2);
+  const wall = solid(aheadT.tx, aheadT.ty);
+
+  if (wall) {
+    if (c.climber && !steel(aheadT.tx, aheadT.ty)) {
+      c.state = 'climb';
+      c.y -= 1.2;
+      // if top
+      const above = tileAtPixel(aheadX, c.y);
+      if (!solid(above.tx, above.ty) && !solid(aheadT.tx, aheadT.ty - 1)) {
+        c.x += c.dir * 4;
+        c.state = 'walk';
+      }
+    } else {
+      c.dir *= -1;
+    }
+  } else {
+    c.x += c.dir * 0.7 * (state.speed || 1);
+  }
+
+  // exit
+  if (state.exit) {
+    const ex = state.exit.x * TILE + TILE / 2;
+    const ey = state.exit.y * TILE + TILE / 2;
+    if (Math.abs(c.x - ex) < 10 && Math.abs(c.y - ey) < 12) {
+      c.saved = true;
+      c.alive = false;
+      state.saved++;
+      log(`Cubit #${c.id} saved!`);
+      checkWin();
+    }
+  }
+
+  // bounds death
+  if (c.y > H + 20) kill(c, 'void');
+}
+
+function kill(c, reason) {
+  if (!c.alive) return;
+  c.alive = false;
+  state.dead++;
+  log(`Cubit #${c.id} lost (${reason})`);
+  checkLose();
+}
+
+function explode(c) {
+  const tx = Math.floor(c.x / TILE);
+  const ty = Math.floor(c.y / TILE);
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      if (dx * dx + dy * dy > 5) continue;
+      const x = tx + dx, y = ty + dy;
+      if (x >= 0 && y >= 0 && x < COLS && y < ROWS && state.tiles[y][x] === 1) {
+        state.tiles[y][x] = 0;
+      }
+    }
+  }
+  kill(c, 'boom');
+}
+
+function assignSkill(c, skill) {
+  if (!c || !c.alive || c.saved) return false;
+  if (c.action === 'blocker') return false;
+  const left = state.skills[skill] || 0;
+  if (left <= 0) return false;
+
+  if (skill === 'climber') {
+    if (c.climber) return false;
+    c.climber = true;
+  } else if (skill === 'floater') {
+    if (c.floater) return false;
+    c.floater = true;
+  } else if (skill === 'bomber') {
+    if (c.bombTimer >= 0) return false;
+    c.bombTimer = 40;
+  } else if (skill === 'blocker') {
+    c.action = 'blocker';
+    c.state = 'block';
+  } else if (skill === 'builder') {
+    c.action = 'builder';
+    c.buildLeft = 12;
+    c.actionTimer = 0;
+  } else if (skill === 'basher') {
+    c.action = 'basher';
+    c.actionTimer = 0;
+  } else if (skill === 'digger') {
+    c.action = 'digger';
+    c.actionTimer = 0;
+  } else return false;
+
+  state.skills[skill]--;
+  log(`${skill.toUpperCase()} → Cubit #${c.id}`);
+  renderSkills();
+  return true;
+}
+
+function checkWin() {
+  if (state.saved >= state.need) {
+    state.won = true;
+    state.running = false;
+    showOverlay('LEVEL COMPLETE', `Saved ${state.saved}/${state.totalToRelease}. Quota met.`, true);
+  }
+}
+function checkLose() {
+  const remaining = state.totalToRelease - state.released + state.cubits.filter(c => c.alive).length;
+  // more accurate:
+  const stillPossible = state.saved + state.cubits.filter(c => c.alive).length + (state.totalToRelease - state.released);
+  if (stillPossible < state.need && state.released >= state.totalToRelease) {
+    state.lost = true;
+    state.running = false;
+    showOverlay('LEVEL FAILED', `Only ${state.saved} saved. Need ${state.need}.`, false);
+  }
+  if (state.timeLeft <= 0 && state.running) {
+    state.lost = true;
+    state.running = false;
+    showOverlay('TIME UP', `Saved ${state.saved}. Need ${state.need}.`, false);
+  }
+}
+
+function showOverlay(title, msg, success) {
+  const ov = document.getElementById('overlay');
+  ov.classList.remove('hidden');
+  document.getElementById('ovTitle').textContent = title;
+  document.getElementById('ovTitle').style.color = success ? '#55ff55' : '#ff5555';
+  document.getElementById('ovMsg').textContent = msg;
+  document.getElementById('btnStart').textContent = success && state.levelIdx < LEVELS.length - 1 ? 'NEXT LEVEL' : 'RETRY';
+}
+
+function hideOverlay() {
+  document.getElementById('overlay').classList.add('hidden');
+}
+
+function loadLevel(idx) {
+  state.levelIdx = Math.max(0, Math.min(idx, LEVELS.length - 1));
+  const L = LEVELS[state.levelIdx];
+  const parsed = parseMap2(L.map);
+  state.tiles = parsed.tiles;
+  state.entrance = parsed.entrance || { x: 10, y: 10 };
+  state.exit = parsed.exit || { x: 60, y: 20 };
+  state.skills = Object.assign({}, L.skills);
+  state.selectedSkill = null;
+  state.cubits = [];
+  state.released = 0;
+  state.saved = 0;
+  state.dead = 0;
+  state.timeLeft = L.time;
+  state.releaseTimer = 0;
+  state.releaseRate = L.rate;
+  state.totalToRelease = L.release;
+  state.need = L.need;
+  state.paused = false;
+  state.running = true;
+  state.won = false;
+  state.lost = false;
+  state.nextId = 1;
+  state.log = [];
+  hideOverlay();
+  log(`Level ${state.levelIdx + 1}: ${L.name}`);
+  log(`Save ${L.need} of ${L.release}`);
+  renderSkills();
+  renderLevelBtns();
+}
+
+function renderSkills() {
+  const el = document.getElementById('skills');
+  el.innerHTML = SKILLS.map(s => {
+    const n = state.skills[s.id] || 0;
+    const active = state.selectedSkill === s.id ? 'active' : '';
+    return `<button class="skill-btn ${active}" data-skill="${s.id}" ${n <= 0 ? 'disabled' : ''}>${s.name}<span class="count">${n}</span></button>`;
+  }).join('');
+  el.querySelectorAll('.skill-btn').forEach(btn => {
+    btn.onclick = () => {
+      state.selectedSkill = btn.getAttribute('data-skill');
+      renderSkills();
+    };
+  });
+}
+
+function renderLevelBtns() {
+  const el = document.getElementById('levelBtns');
+  el.innerHTML = LEVELS.map((L, i) =>
+    `<button class="${i === state.levelIdx ? 'active' : ''}" data-lvl="${i}">${i + 1}</button>`
+  ).join('');
+  el.querySelectorAll('button').forEach(btn => {
+    btn.onclick = () => loadLevel(parseInt(btn.getAttribute('data-lvl'), 10));
+  });
+}
+
+function draw() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  // tiles
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const t = state.tiles[y][x];
+      if (t === 0) continue;
+      const px = x * TILE, py = y * TILE;
+      if (t === 1) {
+        ctx.fillStyle = '#aa5500';
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.fillStyle = '#ffaa00';
+        ctx.fillRect(px, py, TILE, 1);
+      } else if (t === 2) {
+        ctx.fillStyle = '#555555';
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.fillStyle = '#aaaaaa';
+        ctx.fillRect(px + 1, py + 1, TILE - 2, TILE - 2);
+      } else if (t === 5) {
+        ctx.fillStyle = '#0000aa';
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.fillStyle = '#5555ff';
+        ctx.fillRect(px, py + (Math.floor(performance.now() / 200) % 2), TILE, 2);
+      }
+    }
+  }
+
+  // entrance
+  if (state.entrance) {
+    const px = state.entrance.x * TILE;
+    const py = state.entrance.y * TILE;
+    ctx.fillStyle = '#55ff55';
+    ctx.fillRect(px, py - 8, TILE, 8);
+    ctx.fillStyle = '#003300';
+    ctx.fillRect(px + 2, py - 6, TILE - 4, 6);
+  }
+  // exit
+  if (state.exit) {
+    const px = state.exit.x * TILE;
+    const py = state.exit.y * TILE;
+    ctx.fillStyle = '#ffff55';
+    ctx.fillRect(px - 2, py - 10, TILE + 4, 12);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(px, py - 8, TILE, 8);
+    ctx.fillStyle = '#ffff55';
+    ctx.font = '8px "Courier New"';
+    ctx.fillText('OUT', px - 2, py - 12);
+  }
+
+  // cubits
+  for (const c of state.cubits) {
+    if (!c.alive) continue;
+    const px = Math.floor(c.x - 3);
+    const py = Math.floor(c.y - 2);
+    // body
+    let col = '#55ff55';
+    if (c.action === 'blocker') col = '#ff5555';
+    else if (c.action === 'builder') col = '#ffff55';
+    else if (c.action === 'digger') col = '#ffaa00';
+    else if (c.action === 'basher') col = '#55ffff';
+    else if (c.state === 'float') col = '#ff55ff';
+    else if (c.state === 'climb') col = '#55ffff';
+    ctx.fillStyle = col;
+    ctx.fillRect(px, py, 6, 8);
+    // eyes
+    ctx.fillStyle = '#000';
+    ctx.fillRect(px + (c.dir > 0 ? 3 : 1), py + 2, 2, 2);
+    // bomb fuse
+    if (c.bombTimer >= 0) {
+      ctx.fillStyle = '#ff5555';
+      ctx.fillRect(px, py - 6, 6, 4);
+      ctx.fillStyle = '#fff';
+      ctx.font = '8px monospace';
+      ctx.fillText(String(Math.ceil(c.bombTimer / 10)), px + 1, py - 2);
+    }
+    // permanent skills marks
+    if (c.climber) {
+      ctx.fillStyle = '#55ffff';
+      ctx.fillRect(px - 1, py, 1, 8);
+    }
+    if (c.floater) {
+      ctx.fillStyle = '#ff55ff';
+      ctx.fillRect(px + 6, py, 1, 8);
+    }
+  }
+
+  // HUD strip on canvas
+  ctx.fillStyle = '#0000aa';
+  ctx.fillRect(0, 0, W, 12);
+  ctx.fillStyle = '#ffff55';
+  ctx.font = '10px "Courier New", monospace';
+  const L = LEVELS[state.levelIdx];
+  ctx.fillText(`L${state.levelIdx + 1}:${L.name}  T:${Math.max(0, Math.ceil(state.timeLeft))}  OUT:${state.released}  IN:${state.saved}/${state.need}`, 4, 10);
+}
+
+function tick(dt) {
+  if (!state.running || state.paused) return;
+  const steps = state.speed;
+  for (let s = 0; s < steps; s++) {
+    state.timeLeft -= 1 / 30;
+    state.releaseTimer += state.releaseRate / 30;
+    if (state.releaseTimer >= 100 && state.released < state.totalToRelease) {
+      state.releaseTimer = 0;
+      spawnCubit();
+    }
+    for (const c of state.cubits) updateCubit(c);
+  }
+  if (state.timeLeft <= 0) checkLose();
+
+  // UI
+  document.getElementById('lvl').textContent = `${state.levelIdx + 1} — ${LEVELS[state.levelIdx].name}`;
+  document.getElementById('time').textContent = Math.max(0, Math.ceil(state.timeLeft)) + 's';
+  document.getElementById('out').textContent = state.released + '/' + state.totalToRelease;
+  document.getElementById('saved').textContent = state.saved;
+  document.getElementById('need').textContent = state.need;
+  document.getElementById('dead').textContent = state.dead;
+}
+
+let last = performance.now();
+let frames = 0, fpsT = performance.now(), fps = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  frames++;
+  if (now - fpsT > 500) {
+    fps = Math.round(frames * 1000 / (now - fpsT));
+    frames = 0; fpsT = now;
+    document.getElementById('fps').textContent = fps + ' fps';
+  }
+  tick(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+
+canvas.addEventListener('click', (ev) => {
+  if (!state.running) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (ev.clientX - rect.left) * (canvas.width / rect.width);
+  const y = (ev.clientY - rect.top) * (canvas.height / rect.height);
+  if (!state.selectedSkill) return;
+  // pick nearest cubit
+  let best = null, bestD = 16;
+  for (const c of state.cubits) {
+    if (!c.alive) continue;
+    const d = Math.hypot(c.x - x, c.y - y);
+    if (d < bestD) { bestD = d; best = c; }
+  }
+  if (best) assignSkill(best, state.selectedSkill);
+});
+
+document.getElementById('btnPause').onclick = () => {
+  state.paused = !state.paused;
+  document.getElementById('btnPause').textContent = state.paused ? 'Resume' : 'Pause';
+};
+document.getElementById('btnSpeed1').onclick = () => {
+  state.speed = 1;
+  document.getElementById('btnSpeed1').classList.add('active');
+  document.getElementById('btnSpeed2').classList.remove('active');
+};
+document.getElementById('btnSpeed2').onclick = () => {
+  state.speed = 2;
+  document.getElementById('btnSpeed2').classList.add('active');
+  document.getElementById('btnSpeed1').classList.remove('active');
+};
+document.getElementById('btnRestart').onclick = () => loadLevel(state.levelIdx);
+document.getElementById('btnNext').onclick = () => {
+  if (state.levelIdx < LEVELS.length - 1) loadLevel(state.levelIdx + 1);
+  else loadLevel(0);
+};
+document.getElementById('btnStart').onclick = () => {
+  if (state.won && state.levelIdx < LEVELS.length - 1) loadLevel(state.levelIdx + 1);
+  else loadLevel(state.levelIdx);
+};
+
+// keyboard shortcuts
+window.addEventListener('keydown', (e) => {
+  const map = { c: 'climber', f: 'floater', b: 'bomber', x: 'blocker', u: 'builder', h: 'basher', d: 'digger' };
+  const k = e.key.toLowerCase();
+  if (map[k]) {
+    state.selectedSkill = map[k];
+    renderSkills();
+  }
+  if (e.key === ' ') {
+    e.preventDefault();
+    state.paused = !state.paused;
+    document.getElementById('btnPause').textContent = state.paused ? 'Resume' : 'Pause';
+  }
+});
+
+// boot
+renderLevelBtns();
+renderSkills();
+document.getElementById('ovTitle').textContent = 'CUBITS.EXE';
+document.getElementById('ovMsg').textContent = 'A Cubit OS puzzle. Assign skills. Lead them home. DOS mode.';
+document.getElementById('btnStart').textContent = 'START LEVEL 1';
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

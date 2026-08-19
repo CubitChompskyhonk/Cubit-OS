@@ -25,6 +25,16 @@ _port = 8765
 
 
 
+def _load_cubits_html() -> str:
+    candidates = [
+        Path(__file__).resolve().parent / "cubit_static" / "cubits.html",
+        Path(__file__).resolve().parent / "cubit" / "web" / "static" / "cubits.html",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c.read_text(encoding="utf-8")
+    return "<html><body style=\"background:#000;color:#55ff55;font-family:monospace;padding:2rem\"><h1>CUBITS.EXE</h1><p>Asset missing.</p></body></html>"
+
 def _load_cubitz_html() -> str:
     candidates = [
         Path(__file__).resolve().parent / "cubit_static" / "cubitz.html",
@@ -344,6 +354,7 @@ def _toolbar(active: str = "") -> str:
   <a class="dept-chip {'active' if active=='tasks' else ''}" href="/tasks">Tasks</a>
   <a class="dept-chip {'active' if active=='commerce' else ''}" href="/dept/commerce">Commerce</a>
   <a class="dept-chip {'active' if active=='cubitz' else ''}" href="/dept/cubitz">Cubitz</a>
+  <a class="dept-chip {'active' if active=='cubits' else ''}" href="/dept/cubits">Cubits</a>
 </div>
 """
 
@@ -660,6 +671,7 @@ def _make_handler():
                 "Historian": "/dept/historian",
                 "Builder": "/dept/builder",
                 "Cubitz": "/dept/cubitz",
+                "Cubits": "/dept/cubits",
                 "Commerce": "/dept/commerce",
             }
             for d in depts:
@@ -874,6 +886,24 @@ def _make_handler():
             """
             return _shell("Advocate", body, active_dept="advocate", active_nav="chat")
 
+
+        def _page_cubits_dept(self):
+            body = """
+            <div class="hero">
+              <div class="q">Department · Cubits</div>
+              <h2>CUBITS.EXE</h2>
+              <p class="muted" style="margin:0">MS-DOS puzzle — guide cubits to the exit. Lemmings-inspired.</p>
+            </div>
+            <div class="card">
+              <p>Skills: Climber · Floater · Bomber · Blocker · Builder · Basher · Digger</p>
+              <div class="row" style="margin-top:0.85rem;gap:0.5rem;flex-wrap:wrap">
+                <a class="btn" href="/cubits" style="display:inline-block;text-align:center;padding:0.75rem 1.25rem">▶ Start CUBITS.EXE</a>
+                <a class="btn secondary" href="/" style="display:inline-block;text-align:center;padding:0.75rem 1rem">Home</a>
+              </div>
+            </div>
+            """
+            return _shell("Cubits", body, active_dept="cubits", active_nav="builder")
+
         def _page_cubitz_dept(self):
             body = """
             <div class="hero">
@@ -918,6 +948,8 @@ def _make_handler():
                         self.wfile.write(data)
                         return
                 return self._send(404, "missing", content_type="text/plain")
+            if path == "/cubits":
+                return self._send(200, _load_cubits_html())
             if path == "/cubitz":
                 return self._send(200, _load_cubitz_html())
             if path == "/api/health":
@@ -938,6 +970,7 @@ def _make_handler():
                 "/dept/builder": self._page_builder,
                 "/dept/commerce": self._page_commerce,
                 "/dept/cubitz": self._page_cubitz_dept,
+                "/dept/cubits": self._page_cubits_dept,
                 "/dept/advocate": self._page_advocate,
                 "/journal": self._page_historian,
                 "/chronicle": self._page_historian,

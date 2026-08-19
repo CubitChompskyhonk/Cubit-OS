@@ -261,3 +261,18 @@ def page_dept_cubitz(request: Request):
 @app.get("/advocate", response_class=HTMLResponse)
 def page_advocate(request: Request):
     return templates.TemplateResponse("advocate.html", {"request": request})
+
+@app.get("/cubits", response_class=HTMLResponse)
+def page_cubits():
+    """Launch CUBITS.EXE (Lemmings-inspired DOS puzzle)."""
+    html_path = BASE / "static" / "cubits.html"
+    return HTMLResponse(html_path.read_text(encoding="utf-8"))
+
+
+@app.get("/dept/cubits", response_class=HTMLResponse)
+def page_dept_cubits(request: Request):
+    """Department shell for CUBITS.EXE."""
+    return templates.TemplateResponse(
+        "cubits_dept.html",
+        {"request": request, "active": "cubits"},
+    )

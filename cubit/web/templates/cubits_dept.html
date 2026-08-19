@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Cubits — Cubit OS{% endblock %}
+{% block content %}
+<h1>CUBITS.EXE</h1>
+<p class="muted">MS-DOS puzzle — guide the cubits to the exit. Assign skills. Save the quota. Inspired by Lemmings.</p>
+<div class="card">
+  <p><strong>Skills:</strong> Climber · Floater · Bomber · Blocker · Builder · Basher · Digger</p>
+  <ul class="muted">
+    <li>Click a skill, then click a cubit</li>
+    <li>Save enough cubits before time runs out</li>
+    <li>Steel cannot be dug; water is lethal</li>
+  </ul>
+  <div class="row" style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+    <a class="btn" href="/cubits" style="display:inline-block;background:var(--accent,#f59e0b);color:#0b0d12;padding:0.6rem 1.2rem;border-radius:8px;font-weight:600;text-decoration:none">▶ Start CUBITS.EXE</a>
+    <a class="btn secondary" href="/" style="display:inline-block;background:#2a2f3a;color:var(--text);padding:0.6rem 1.2rem;border-radius:8px;text-decoration:none">Back to Chat</a>
+  </div>
+</div>
+{% endblock %}
