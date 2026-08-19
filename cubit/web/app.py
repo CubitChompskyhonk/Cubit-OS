@@ -266,7 +266,13 @@ def page_advocate(request: Request):
 def page_cubits():
     """Launch CUBITS.EXE (Lemmings-inspired DOS puzzle)."""
     html_path = BASE / "static" / "cubits.html"
-    return HTMLResponse(html_path.read_text(encoding="utf-8"))
+    if not html_path.exists():
+        return HTMLResponse("<h1>CUBITS.EXE</h1><p>Asset missing.</p>", status_code=404)
+    try:
+        body = html_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        body = html_path.read_text(encoding="latin-1")
+    return HTMLResponse(body, media_type="text/html; charset=utf-8")
 
 
 @app.get("/dept/cubits", response_class=HTMLResponse)

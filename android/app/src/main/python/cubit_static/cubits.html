@@ -44,7 +44,7 @@ footer{border-top:2px solid var(--panel);background:var(--panel);padding:3px 8px
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-box">C&gt;</div><div><h1>CUBITS.EXE</h1><span class="badge">MS-DOS � LEMMINGS-STYLE</span></div></div>
+  <div class="logo"><div class="logo-box">C&gt;</div><div><h1>CUBITS.EXE</h1><span class="badge">MS-DOS ï¿½ LEMMINGS-STYLE</span></div></div>
   <div class="controls">
     <button id="btnPause">Pause</button>
     <button id="btnSpeed1" class="active">1x</button>
@@ -79,7 +79,7 @@ footer{border-top:2px solid var(--panel);background:var(--panel);padding:3px 8px
     <div class="panel"><h3>Log</h3><div class="log" id="log"></div></div>
   </aside>
 </main>
-<footer><span>C:\CUBIT\CUBITS.EXE � SAVE THE CUBITS</span><span id="fps">-</span></footer>
+<footer><span>C:\CUBIT\CUBITS.EXE ï¿½ SAVE THE CUBITS</span><span id="fps">-</span></footer>
 <script>
 (function(){
 "use strict";
@@ -413,7 +413,7 @@ function loadLevel(idx){
   state.won=false; state.lost=false; state.nextId=1; state.logLines=[]; state.tickCount=0;
   hideOverlay();
   log("Level "+(state.levelIdx+1)+": "+L.name);
-  log("Save "+L.need+" of "+L.release+" � "+L.time+"s");
+  log("Save "+L.need+" of "+L.release+" ï¿½ "+L.time+"s");
   log("IN "+state.entrance.x+","+state.entrance.y+" -> OUT "+state.exit.x+","+state.exit.y);
   renderSkills(); renderLevelBtns(); updateHud();
 }
@@ -536,7 +536,7 @@ function frame(now){
   var dt=Math.min(0.05,(now-last)/1000); last=now;
   frames++;
   if(now-fpsT>500){
-    document.getElementById("fps").textContent=Math.round(frames*1000/(now-fpsT))+" fps � "+state.speed+"x";
+    document.getElementById("fps").textContent=Math.round(frames*1000/(now-fpsT))+" fps ï¿½ "+state.speed+"x";
     frames=0; fpsT=now;
   }
   acc+=dt*state.speed;

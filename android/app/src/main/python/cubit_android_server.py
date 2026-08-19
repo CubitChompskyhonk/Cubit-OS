@@ -31,9 +31,20 @@ def _load_cubits_html() -> str:
         Path(__file__).resolve().parent / "cubit" / "web" / "static" / "cubits.html",
     ]
     for c in candidates:
-        if c.exists():
-            return c.read_text(encoding="utf-8")
-    return "<html><body style=\"background:#000;color:#55ff55;font-family:monospace;padding:2rem\"><h1>CUBITS.EXE</h1><p>Asset missing.</p></body></html>"
+        if c.exists() and c.is_file():
+            try:
+                return c.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                return c.read_text(encoding="latin-1")
+            except Exception as e:
+                return (
+                    "<html><body style='background:#000;color:#ff5555;font-family:monospace;padding:2rem'>"
+                    "<h1>CUBITS.EXE</h1><p>Load error: " + str(e) + "</p></body></html>"
+                )
+    return (
+        "<html><body style=\"background:#000;color:#55ff55;font-family:monospace;padding:2rem\">"
+        "<h1>CUBITS.EXE</h1><p>Asset missing. Rebuild APK to include cubits.html.</p></body></html>"
+    )
 
 def _load_cubitz_html() -> str:
     candidates = [
