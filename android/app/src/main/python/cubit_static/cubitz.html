@@ -152,6 +152,7 @@
     </div>
     <div class="controls">
       <button id="btnPause">Pause</button>
+      <button id="btnClockRT" title="Realtime: 60s = 1 year">RT</button>
       <button id="btnSpeed1" class="active">1×</button>
       <button id="btnSpeed2">2×</button>
       <button id="btnSpeed5">5×</button>
@@ -242,6 +243,8 @@
         <div class="stat-row"><span class="stat-label">Tax revenue</span><span class="stat-value" id="taxRev">$0</span></div>
         <div class="stat-row"><span class="stat-label">Media mood</span><span class="stat-value" id="mediaMood">0</span></div>
         <div class="stat-row"><span class="stat-label">Comms level</span><span class="stat-value" id="comms">1</span></div>
+        <div class="stat-row"><span class="stat-label">Spirituality</span><span class="stat-value" id="spirituality">50</span></div>
+        <div class="stat-row"><span class="stat-label">Clock</span><span class="stat-value" id="clockMode">1× year</span></div>
       </div>
 
       <div class="panel">
@@ -296,7 +299,12 @@ const REGIONS = [
 ];
 
 const GOODS = ['grain', 'ore', 'cloth', 'spice'];
-const YEAR_MS = 5000; // 5s = 1 year at 1× — contemplative god-game pace
+let YEAR_MS = 5000; // base year duration at 1× (year mode)
+const YEAR_MS_YEAR = 5000;   // 5s = 1 year
+const YEAR_MS_REALTIME = 60000; // 60s = 1 year in realtime mode
+function effectiveYearMs() {
+  return state.clockMode === 'realtime' ? YEAR_MS_REALTIME : (state.yearMs || YEAR_MS_YEAR);
+}
 const MAP_NATIONS = 1, MAP_POP = 2, MAP_BOTH = 3;
 
 const canvas = document.getElementById('canvas');
@@ -317,6 +325,36 @@ function resize() {
 }
 window.addEventListener('resize', resize);
 resize();
+
+function updateWorldScale() {
+  const pop = state.metabolites.filter(m => m.alive).length;
+  const targetScale = clamp(1 + Math.max(0, pop - 20) * 0.012, 1, 2.4);
+  state.worldScale = (state.worldScale || 1) * 0.92 + targetScale * 0.08;
+  const targetZoom = clamp(1.45 - pop * 0.006, 0.72, 1.45);
+  state.viewZoom = (state.viewZoom || 1) * 0.9 + targetZoom * 0.1;
+}
+
+function worldBounds() {
+  const pad = 16;
+  return { minX: pad, minY: pad, maxX: W - pad, maxY: H - pad, scale: state.worldScale || 1 };
+}
+
+function applyViewTransform() {
+  const z = state.viewZoom || 1;
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.scale(z, z);
+  ctx.translate(-W / 2, -H / 2);
+}
+
+function endViewTransform() {
+  ctx.restore();
+}
+
+function safeTribe(id) {
+  return tribeById(id) || TRIBES[0];
+}
+
 
 function hexToRgb(hex) {
   const h = hex.replace('#', '');
@@ -382,7 +420,13 @@ const state = {
   lastConquestYear: -99,
   worldScale: 1,
   viewZoom: 1.35,
-  watcherPresence: 0
+  watcherPresence: 0,
+  clockMode: 'year', // year | realtime
+  yearMs: 5000,
+  culture: {},
+  tech: {},
+  institutions: {},
+  spirituality: 50
 };
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
@@ -975,6 +1019,7 @@ function updateComplexity() {
 
 // ---------- YEAR TICK ----------
 function yearTick() {
+  try {
   state.year++;
   let tasks = 0, offerings = 0, trades = 0, volume = 0;
   const alive = state.metabolites.filter(m => m.alive);
@@ -1167,6 +1212,61 @@ function yearTick() {
   if (avgKnow > 55) zg.push('enlightenment');
   if (season === 0 && state.mediaMood > 10) zg.push('renewal');
   state.zeitgeist = zg.length ? zg.join(' · ') : 'equilibrium';
+
+  // --- Culture · Technology · Spirituality · Institutions ---
+  const avgFaith = alive.length ? alive.reduce((s, m) => s + m.faith, 0) / alive.length : 0;
+  const avgKnow = alive.length ? alive.reduce((s, m) => s + m.knowledge, 0) / alive.length : 0;
+  const avgBelief = alive.length ? alive.reduce((s, m) => s + m.belief, 0) / alive.length : 0;
+  state.spirituality = clamp(state.spirituality * 0.95 + (avgFaith * 0.4 + avgBelief * 0.3 - state.corruption * 0.2) * 0.05, 0, 100);
+
+  for (const t of TRIBES) {
+    const mem = alive.filter(m => m.tribe === t.id);
+    if (!mem.length) continue;
+    const id = t.id;
+    if (!state.culture[id]) state.culture[id] = { literacy: 5, art: 5, law: 5, custom: 50 };
+    if (!state.tech[id]) state.tech[id] = { tools: 5, agriculture: 10, writing: 0, industry: 0 };
+    if (!state.institutions[id]) state.institutions[id] = { court: 0, school: 0, temple: 0, market: 0, army: 0 };
+
+    const c = state.culture[id], tech = state.tech[id], inst = state.institutions[id];
+    const k = mem.reduce((s, m) => s + m.knowledge, 0) / mem.length;
+    const f = mem.reduce((s, m) => s + m.faith, 0) / mem.length;
+    const wealth = mem.reduce((s, m) => s + m.money, 0);
+
+    // technological accumulation
+    tech.tools = clamp(tech.tools + k * 0.02 + (t.traits || []).includes('scholarly') * 0.05, 0, 100);
+    tech.agriculture = clamp(tech.agriculture + ((t.traits || []).includes('agrarian') ? 0.08 : 0.03) + (state.forage[Object.keys(state.forage)[0]] || 30) * 0.002, 0, 100);
+    if (state.commsLevel >= 2) tech.writing = clamp(tech.writing + 0.06 + k * 0.01, 0, 100);
+    if (state.commsLevel >= 3) tech.industry = clamp(tech.industry + 0.04 + wealth * 0.0005, 0, 100);
+
+    // culture
+    c.literacy = clamp(c.literacy + tech.writing * 0.02 + k * 0.015, 0, 100);
+    c.art = clamp(c.art + (state.mediaMood > 0 ? 0.05 : 0.01) + f * 0.01, 0, 100);
+    c.law = clamp(c.law + (t.gov === 'theocracy' || t.gov === 'merchant_league' ? 0.06 : 0.03), 0, 100);
+    c.custom = clamp(c.custom + (t.society === 'temple' ? 0.04 : -0.01) + rand(-0.1, 0.1), 0, 100);
+
+    // institutions form when thresholds met
+    if (c.law > 25 && inst.court < 1) { inst.court = 1; log(`${t.name} establishes a court of law`); }
+    if (c.literacy > 30 && inst.school < 1) { inst.school = 1; log(`${t.name} opens schools`); }
+    if (f > 55 && inst.temple < 1) { inst.temple = 1; log(`${t.name} raises a temple`); }
+    if (wealth > 80 && inst.market < 1) { inst.market = 1; log(`${t.name} charters a market`); }
+    if ((t.traits || []).includes('martial') && mem.length > 8 && inst.army < 1) { inst.army = 1; log(`${t.name} forms a standing host`); }
+
+    // institutional feedback
+    if (inst.school) mem.forEach(m => { m.knowledge = clamp(m.knowledge + 0.15, 0, 100); });
+    if (inst.temple) mem.forEach(m => { m.faith = clamp(m.faith + 0.12, 0, 100); });
+    if (inst.market) mem.forEach(m => { if (Math.random() < 0.08) m.money += rand(0.3, 1.5); });
+    if (inst.army) mem.forEach(m => { m.aggression = clamp(m.aggression + 0.2, 0, 100); });
+    if (inst.court) mem.forEach(m => { m.stress = clamp(m.stress - 0.15, 0, 100); });
+
+    // tech improves forage / trade
+    if (tech.agriculture > 20) {
+      for (const r of REGIONS) {
+        if (regionAt(t.x * W, t.y * H).id === r.id || Math.random() < 0.1)
+          state.forage[r.id] = clamp((state.forage[r.id] || 30) + tech.agriculture * 0.01, 0, 130);
+      }
+    }
+  }
+
 
 
   // --- Dynamic diplomacy ---
@@ -1391,6 +1491,10 @@ function yearTick() {
   document.getElementById('offerings').textContent = '$' + offerings.toFixed(1);
   document.getElementById('trades').textContent = trades;
   document.getElementById('volume').textContent = '$' + volume.toFixed(1);
+  } catch (err) {
+    console.error('yearTick', err);
+    log('yearTick error: ' + (err && err.message ? err.message : err));
+  }
 }
 
 // ---------- DRAW ----------
@@ -1401,7 +1505,7 @@ function drawPopulationUnder() {
 
   for (const m of state.metabolites) {
     if (!m.alive || !m.trail || m.trail.length < 2) continue;
-    const col = m.color || tribeById(m.tribe).color;
+    const col = m.color || safeTribe(m.tribe).color;
     trailCtx.strokeStyle = col + '55';
     trailCtx.lineWidth = 1.5;
     trailCtx.beginPath();
@@ -1534,7 +1638,7 @@ function render() {
   const sizeBoost = clamp(1.35 - popN * 0.008, 0.85, 1.4);
   for (const m of state.metabolites) {
     if (!m.alive) continue;
-    const col = m.color || tribeById(m.tribe).color;
+    const col = m.color || safeTribe(m.tribe).color;
     const r = m.mass * 9 * (typeof sizeBoost !== "undefined" ? sizeBoost : 1);
     if (m.stress > 55) {
       ctx.beginPath();
@@ -1591,6 +1695,10 @@ function render() {
   if (mm) mm.textContent = (state.mediaMood || 0).toFixed(0);
   const cl = document.getElementById('comms');
   if (cl) cl.textContent = (state.commsLevel || 1) + ' (' + ['','oral','script','print','broadcast'][state.commsLevel||1] + ')';
+  const sp = document.getElementById('spirituality');
+  if (sp) sp.textContent = (state.spirituality || 0).toFixed(0);
+  const cm = document.getElementById('clockMode');
+  if (cm) cm.textContent = state.clockMode === 'realtime' ? 'RT 60s/y' : (state.speed + '× year');
   const seasonNames = ['Spring','Summer','Autumn','Winter'];
   const se = document.getElementById('season');
   if (se) se.textContent = seasonNames[state.season] || '—';
@@ -1692,7 +1800,20 @@ function renderNationInspector() {
     <div class="insp-row"><span>Traits</span><span>${(t.traits||[]).join(', ')||'—'}</span></div>
     <div class="insp-row"><span>Wars</span><span>${warList}</span></div>
     <div class="insp-row"><span>Complexity</span><span>T${state.complexityTier||1}</span></div>
+    <div class="insp-row"><span>Culture</span><span>${fmtInst(state.culture[t.id])}</span></div>
+    <div class="insp-row"><span>Tech</span><span>${fmtInst(state.tech[t.id])}</span></div>
+    <div class="insp-row"><span>Institutions</span><span>${fmtFlags(state.institutions[t.id])}</span></div>
   `;
+}
+function fmtInst(o) {
+  if (!o) return '—';
+  if (o.literacy != null) return 'lit ' + o.literacy.toFixed(0) + ' law ' + o.law.toFixed(0);
+  if (o.tools != null) return 'tools ' + o.tools.toFixed(0) + ' agr ' + o.agriculture.toFixed(0);
+  return '—';
+}
+function fmtFlags(o) {
+  if (!o) return '—';
+  return Object.keys(o).filter(k => o[k] > 0).join(', ') || 'none';
 }
 
 function selectNation(id) {
@@ -1905,13 +2026,16 @@ function frame(now) {
   if (now - fpsT > 500) {
     fpsVal = Math.round(frames * 1000 / (now - fpsT));
     frames = 0; fpsT = now;
-    document.getElementById('fps').textContent = fpsVal + ' fps';
+    const clockLabel = state.clockMode === 'realtime' ? 'RT' : (state.speed + '×');
+    document.getElementById('fps').textContent = fpsVal + ' fps · ' + clockLabel + ' · Y' + state.year;
   }
   if (!state.paused) {
     physicsStep(dt);
+    const yms = effectiveYearMs();
+    YEAR_MS = yms;
     yearAcc += dt * 1000 * state.speed;
-    while (yearAcc >= YEAR_MS) {
-      yearAcc -= YEAR_MS;
+    while (yearAcc >= yms) {
+      yearAcc -= yms;
       yearTick();
     }
   }
@@ -1920,10 +2044,27 @@ function frame(now) {
 }
 
 function setSpeed(s) {
+  state.clockMode = 'year';
   state.speed = s;
+  state.yearMs = YEAR_MS_YEAR;
   ['btnSpeed1','btnSpeed2','btnSpeed5'].forEach(id => {
-    document.getElementById(id).classList.toggle('active', id === 'btnSpeed' + s);
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', id === 'btnSpeed' + s);
   });
+  const rt = document.getElementById('btnClockRT');
+  if (rt) rt.classList.remove('active');
+}
+function setRealtime() {
+  state.clockMode = 'realtime';
+  state.speed = 1;
+  state.yearMs = YEAR_MS_REALTIME;
+  ['btnSpeed1','btnSpeed2','btnSpeed5'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  });
+  const rt = document.getElementById('btnClockRT');
+  if (rt) rt.classList.add('active');
+  log('Clock: REALTIME (60s = 1 year)');
 }
 function setMapMode(mode) {
   state.mapMode = mode;
@@ -1936,6 +2077,7 @@ document.getElementById('btnPause').onclick = () => {
   state.paused = !state.paused;
   document.getElementById('btnPause').textContent = state.paused ? 'Resume' : 'Pause';
 };
+document.getElementById('btnClockRT').onclick = () => setRealtime();
 document.getElementById('btnSpeed1').onclick = () => setSpeed(1);
 document.getElementById('btnSpeed2').onclick = () => setSpeed(2);
 document.getElementById('btnSpeed5').onclick = () => setSpeed(5);
