@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Trapball — Cubit OS{% endblock %}
+{% block content %}
+<h1>TRAPBALL.EXE</h1>
+<p class="muted">MS-DOS puzzle inspired by JezzBall. Build walls to trap bouncing balls and claim the board.</p>
+<div class="card">
+  <ul class="muted">
+    <li>Choose Horizontal or Vertical wall mode</li>
+    <li>Click the field - the wall grows both directions</li>
+    <li>If a ball hits an unfinished wall, you lose a life</li>
+    <li>Claim enough area to clear the level</li>
+  </ul>
+  <div class="row" style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+    <a class="btn" href="/trapball" style="display:inline-block;background:var(--accent,#f59e0b);color:#0b0d12;padding:0.6rem 1.2rem;border-radius:8px;font-weight:600;text-decoration:none">Start TRAPBALL.EXE</a>
+    <a class="btn secondary" href="/" style="display:inline-block;background:#2a2f3a;color:var(--text);padding:0.6rem 1.2rem;border-radius:8px;text-decoration:none">Back to Chat</a>
+  </div>
+</div>
+{% endblock %}

@@ -38,6 +38,7 @@ jobs:
           mkdir -p android/app/src/main/python/cubit_static
           cp -f cubit/web/static/cubitz.html android/app/src/main/python/cubit_static/cubitz.html
           cp -f cubit/web/static/cubits.html android/app/src/main/python/cubit_static/cubits.html
+          cp -f cubit/web/static/trapball.html android/app/src/main/python/cubit_static/trapball.html
           cp -f cubit/web/static/VOX_BIBLICAL_888.wav android/app/src/main/python/cubit_static/VOX_BIBLICAL_888.wav || true
           test -f android/app/src/main/python/cubit_static/cubitz.html
           test -f android/app/src/main/python/cubit_static/VOX_BIBLICAL_888.wav

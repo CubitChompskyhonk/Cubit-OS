@@ -282,3 +282,24 @@ def page_dept_cubits(request: Request):
         "cubits_dept.html",
         {"request": request, "active": "cubits"},
     )
+
+@app.get("/trapball", response_class=HTMLResponse)
+def page_trapball():
+    """Launch TRAPBALL.EXE (JezzBall-inspired DOS puzzle)."""
+    html_path = BASE / "static" / "trapball.html"
+    if not html_path.exists():
+        return HTMLResponse("<h1>TRAPBALL.EXE</h1><p>Asset missing.</p>", status_code=404)
+    try:
+        body = html_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        body = html_path.read_text(encoding="latin-1")
+    return HTMLResponse(body, media_type="text/html; charset=utf-8")
+
+
+@app.get("/dept/trapball", response_class=HTMLResponse)
+def page_dept_trapball(request: Request):
+    """Department shell for TRAPBALL.EXE."""
+    return templates.TemplateResponse(
+        "trapball_dept.html",
+        {"request": request, "active": "trapball"},
+    )

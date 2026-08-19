@@ -25,6 +25,19 @@ _port = 8765
 
 
 
+def _load_trapball_html() -> str:
+    candidates = [
+        Path(__file__).resolve().parent / "cubit_static" / "trapball.html",
+        Path(__file__).resolve().parent / "cubit" / "web" / "static" / "trapball.html",
+    ]
+    for c in candidates:
+        if c.exists() and c.is_file():
+            try:
+                return c.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                return c.read_text(encoding="latin-1")
+    return "<html><body style=\"background:#000;color:#55ff55;font-family:monospace;padding:2rem\"><h1>TRAPBALL.EXE</h1><p>Asset missing.</p></body></html>"
+
 def _load_cubits_html() -> str:
     candidates = [
         Path(__file__).resolve().parent / "cubit_static" / "cubits.html",
@@ -366,6 +379,7 @@ def _toolbar(active: str = "") -> str:
   <a class="dept-chip {'active' if active=='commerce' else ''}" href="/dept/commerce">Commerce</a>
   <a class="dept-chip {'active' if active=='cubitz' else ''}" href="/dept/cubitz">Cubitz</a>
   <a class="dept-chip {'active' if active=='cubits' else ''}" href="/dept/cubits">Cubits</a>
+  <a class="dept-chip {'active' if active=='trapball' else ''}" href="/dept/trapball">Trapball</a>
 </div>
 """
 
@@ -683,6 +697,7 @@ def _make_handler():
                 "Builder": "/dept/builder",
                 "Cubitz": "/dept/cubitz",
                 "Cubits": "/dept/cubits",
+                "Trapball": "/dept/trapball",
                 "Commerce": "/dept/commerce",
             }
             for d in depts:
@@ -898,6 +913,24 @@ def _make_handler():
             return _shell("Advocate", body, active_dept="advocate", active_nav="chat")
 
 
+
+        def _page_trapball_dept(self):
+            body = """
+            <div class="hero">
+              <div class="q">Department - Trapball</div>
+              <h2>TRAPBALL.EXE</h2>
+              <p class="muted" style="margin:0">JezzBall-inspired DOS wall-trap puzzle.</p>
+            </div>
+            <div class="card">
+              <p>Build horizontal or vertical walls. Claim the board. Balls destroy unfinished walls.</p>
+              <div class="row" style="margin-top:0.85rem;gap:0.5rem;flex-wrap:wrap">
+                <a class="btn" href="/trapball" style="display:inline-block;text-align:center;padding:0.75rem 1.25rem">Start TRAPBALL.EXE</a>
+                <a class="btn secondary" href="/" style="display:inline-block;text-align:center;padding:0.75rem 1rem">Home</a>
+              </div>
+            </div>
+            """
+            return _shell("Trapball", body, active_dept="trapball", active_nav="builder")
+
         def _page_cubits_dept(self):
             body = """
             <div class="hero">
@@ -959,6 +992,8 @@ def _make_handler():
                         self.wfile.write(data)
                         return
                 return self._send(404, "missing", content_type="text/plain")
+            if path == "/trapball":
+                return self._send(200, _load_trapball_html())
             if path == "/cubits":
                 return self._send(200, _load_cubits_html())
             if path == "/cubitz":
@@ -982,6 +1017,7 @@ def _make_handler():
                 "/dept/commerce": self._page_commerce,
                 "/dept/cubitz": self._page_cubitz_dept,
                 "/dept/cubits": self._page_cubits_dept,
+                "/dept/trapball": self._page_trapball_dept,
                 "/dept/advocate": self._page_advocate,
                 "/journal": self._page_historian,
                 "/chronicle": self._page_historian,

@@ -16,6 +16,7 @@ _BUILTINS = [
     ("Builder", "How do we create?"),
     ("Cubitz", "Living garden simulation — start the world"),
     ("Cubits", "MS-DOS puzzle — save the cubits (Lemmings-inspired)"),
+    ("Trapball", "MS-DOS puzzle — trap balls with walls (JezzBall-inspired)"),
     ("Advocate", "Personal agent — offline calls, mail, appointments, sales, PR"),
 ]
 
